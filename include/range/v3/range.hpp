@@ -16,9 +16,9 @@
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
-#include <range/v3/range_interface.hpp>
-#include <range/v3/utility/meta.hpp>
+#include <range/v3/view_interface.hpp>
 #include <range/v3/utility/concepts.hpp>
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/compressed_pair.hpp>
@@ -32,7 +32,7 @@ namespace ranges
         /// \cond
         namespace detail
         {
-            template<typename T, typename U = meta::eval<std::remove_const<T>>>
+            template<typename T, typename U = meta::_t<std::remove_const<T>>>
             constexpr U && unsafe_move(T &t)
             {
                 return static_cast<U &&>(const_cast<U &>(t));
@@ -45,10 +45,13 @@ namespace ranges
         template<typename I, typename S /*= I*/>
         struct range
           : private compressed_pair<I, S>
-          , range_interface<range<I, S>>
+          , view_interface<range<I, S>>
         {
             using iterator = I;
             using sentinel = S;
+        #ifndef RANGES_DOXYGEN_INVOKED
+            using const_iterator = I; // Mostly to avoid spurious errors in Boost.Range
+        #endif
             using compressed_pair<I, S>::first;
             using compressed_pair<I, S>::second;
 
@@ -57,12 +60,12 @@ namespace ranges
               : compressed_pair<I, S>{detail::move(begin), detail::move(end)}
             {}
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<X, iterator>() && Convertible<Y, sentinel>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<X, iterator>() && ConvertibleTo<Y, sentinel>())>
             constexpr range(range<X, Y> rng)
               : compressed_pair<I, S>{detail::move(rng.first), detail::move(rng.second)}
             {}
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<X, iterator>() && Convertible<Y, sentinel>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<X, iterator>() && ConvertibleTo<Y, sentinel>())>
             constexpr range(std::pair<X, Y> rng)
               : compressed_pair<I, S>{detail::move(rng.first), detail::move(rng.second)}
             {}
@@ -75,7 +78,7 @@ namespace ranges
                 return second;
             }
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<I, X>() && Convertible<S, Y>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<I, X>() && ConvertibleTo<S, Y>())>
             constexpr operator std::pair<X, Y>() const
             {
                 return {first, second};
@@ -102,7 +105,7 @@ namespace ranges
         template<typename I, typename S /* = I */>
         struct sized_range
           : private compressed_pair<I const, S const>
-          , range_interface<sized_range<I, S>>
+          , view_interface<sized_range<I, S>>
         {
         private:
             template<typename X, typename Y>
@@ -115,14 +118,22 @@ namespace ranges
             {
                 return detail::unsafe_move(this->second);
             }
+            template<typename J = I,
+                CONCEPT_REQUIRES_(ForwardIterator<J>() && IteratorRange<J, S>())>
             void check() const
             {
-                RANGES_ASSERT(!ForwardIterator<I>() ||
-                    static_cast<iterator_size_t<I>>(iter_distance(first, second)) == third);
+                RANGES_ASSERT(static_cast<iterator_size_t<I>>(iter_distance(first, second)) == third);
             }
+            template<typename J = I,
+                CONCEPT_REQUIRES_(!ForwardIterator<J>() || !IteratorRange<J, S>())>
+            void check() const
+            {}
         public:
             using iterator = I;
             using sentinel = S;
+        #ifndef RANGES_DOXYGEN_INVOKED
+            using const_iterator = I; // Mostly to avoid spurious errors in Boost.Range
+        #endif
             using compressed_pair<I const, S const>::first;
             using compressed_pair<I const, S const>::second;
             iterator_size_t<I> const third;
@@ -142,17 +153,17 @@ namespace ranges
               : compressed_pair<I const, S const>{rng.move_first(), rng.move_second()}, third(rng.third)
             {}
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<X, I>() && Convertible<Y, S>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<X, I>() && ConvertibleTo<Y, S>())>
             sized_range(std::pair<X, Y> rng, iterator_size_t<I> size)
               : sized_range{std::move(rng).first, std::move(rng).second, size}
             {}
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<X, I>() && Convertible<Y, S>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<X, I>() && ConvertibleTo<Y, S>())>
             sized_range(range<X, Y> rng, iterator_size_t<I> size)
               : sized_range{std::move(rng).first, std::move(rng).second, size}
             {}
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<X, I>() && Convertible<Y, S>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<X, I>() && ConvertibleTo<Y, S>())>
             sized_range(sized_range<X, Y> rng)
               : sized_range{rng.move_first(), rng.move_second(), rng.third}
             {}
@@ -171,7 +182,7 @@ namespace ranges
                 return *this;
             }
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Assignable<I &, X &&>() && Assignable<S &, Y &&>())>
+                CONCEPT_REQUIRES_(Assignable<I&, X &&>() && Assignable<S&, Y &&>())>
             sized_range &operator=(sized_range<X, Y> rng)
             {
                 const_cast<I &>(first) = rng.move_first();
@@ -192,13 +203,13 @@ namespace ranges
                 return third;
             }
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<I, X>() && Convertible<S, Y>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<I, X>() && ConvertibleTo<S, Y>())>
             constexpr operator std::pair<X, Y>() const
             {
                 return {first, second};
             }
             template<typename X, typename Y,
-                CONCEPT_REQUIRES_(Convertible<I, X>() && Convertible<S, Y>())>
+                CONCEPT_REQUIRES_(ConvertibleTo<I, X>() && ConvertibleTo<S, Y>())>
             constexpr operator range<X, Y>() const
             {
                 return {first, second};
@@ -216,10 +227,9 @@ namespace ranges
             }
 
             /// \return `{begin, end, size}`
-            template<typename I, typename S, typename Size>
-            sized_range<I, S> operator()(I begin, S end, Size size) const
+            template<typename I, typename S>
+            sized_range<I, S> operator()(I begin, S end, iterator_size_t<I> size) const
             {
-                CONCEPT_ASSERT(Integral<Size>());
                 CONCEPT_ASSERT(IteratorRange<I, S>());
                 return {std::move(begin), std::move(end), size};
             }
@@ -342,7 +352,7 @@ namespace ranges
             return detail::move(p).second;
         }
 
-        // TODO add specialization of is_infinite for when we can determine the range is infinite
+        // TODO add specialization of range_cardinality for when we can determine the range is infinite
 
         /// @}
     }

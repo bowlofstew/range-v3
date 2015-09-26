@@ -19,12 +19,13 @@
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/copy.hpp>
 #include <range/v3/utility/static_const.hpp>
+#include <range/v3/utility/tagged_pair.hpp>
+#include <range/v3/algorithm/tagspec.hpp>
 
 namespace ranges
 {
@@ -36,32 +37,31 @@ namespace ranges
         {
             using aux::copy_fn::operator();
 
-            template<typename I, typename S, typename O, typename P = ident,
+            template<typename I, typename S, typename O,
                 CONCEPT_REQUIRES_(
                     InputIterator<I>() && IteratorRange<I, S>() &&
                     WeaklyIncrementable<O>() &&
-                    IndirectlyCopyable<I, O, P>()
+                    IndirectlyCopyable<I, O>()
                 )>
-            std::pair<I, O>
-            operator()(I begin, S end, O out, P proj_ = P{}) const
+            tagged_pair<tag::in(I), tag::out(O)>
+            operator()(I begin, S end, O out) const
             {
-                auto &&proj = invokable(proj_);
                 for(; begin != end; ++begin, ++out)
-                    *out = proj(*begin);
+                    *out = *begin;
                 return {begin, out};
             }
 
-            template<typename Rng, typename O, typename P = ident,
+            template<typename Rng, typename O,
                 typename I = range_iterator_t<Rng>,
                 CONCEPT_REQUIRES_(
-                    InputIterable<Rng &>() &&
+                    InputRange<Rng>() &&
                     WeaklyIncrementable<O>() &&
-                    IndirectlyCopyable<I, O, P>()
+                    IndirectlyCopyable<I, O>()
                 )>
-            std::pair<I, O>
-            operator()(Rng &rng, O out, P proj = P{}) const
+            tagged_pair<tag::in(range_safe_iterator_t<Rng>), tag::out(O)>
+            operator()(Rng &&rng, O out) const
             {
-                return (*this)(begin(rng), end(rng), std::move(out), std::move(proj));
+                return (*this)(begin(rng), end(rng), std::move(out));
             }
         };
 
@@ -69,7 +69,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& copy = static_const<copy_fn>::value;
+            constexpr auto&& copy = static_const<with_braced_init_args<copy_fn>>::value;
         }
 
         /// @}

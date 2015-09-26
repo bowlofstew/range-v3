@@ -10,14 +10,15 @@
 //
 // Project home: https://github.com/ericniebler/range-v3
 //
-#ifndef RANGES_V3_RANGE_FACADE_HPP
-#define RANGES_V3_RANGE_FACADE_HPP
+#ifndef RANGES_V3_VIEW_FACADE_HPP
+#define RANGES_V3_VIEW_FACADE_HPP
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/range_access.hpp>
-#include <range/v3/range_interface.hpp>
+#include <range/v3/view_interface.hpp>
 #include <range/v3/utility/concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/basic_iterator.hpp>
@@ -31,11 +32,11 @@ namespace ranges
         {
             template<typename Derived>
             using begin_cursor_t =
-                decltype(range_access::begin_cursor(std::declval<Derived &>()));
+                decltype(range_access::begin_cursor(std::declval<Derived &>(), 42));
 
             template<typename Derived>
             using end_cursor_t =
-                decltype(range_access::end_cursor(std::declval<Derived &>()));
+                decltype(range_access::end_cursor(std::declval<Derived &>(), 42));
 
             template<typename Derived>
             using facade_iterator_t =
@@ -61,14 +62,14 @@ namespace ranges
             }
         };
 
-        template<typename Derived, bool Inf>
-        struct range_facade
-          : range_interface<Derived, Inf>
+        template<typename Derived, cardinality Cardinality>
+        struct view_facade
+          : view_interface<Derived, Cardinality>
         {
         protected:
             friend range_access;
-            using range_facade_t = range_facade;
-            using range_interface<Derived, Inf>::derived;
+            using view_facade_t = view_facade;
+            using view_interface<Derived, Cardinality>::derived;
             // Default implementations
             Derived begin_cursor() const
             {
@@ -82,29 +83,29 @@ namespace ranges
             template<typename D = Derived, CONCEPT_REQUIRES_(Same<D, Derived>())>
             detail::facade_iterator_t<D> begin()
             {
-                return {range_access::begin_cursor(derived())};
+                return {range_access::begin_cursor(derived(), 42)};
             }
             /// \overload
             template<typename D = Derived, CONCEPT_REQUIRES_(Same<D, Derived>())>
             detail::facade_iterator_t<D const> begin() const
             {
-                return {range_access::begin_cursor(derived())};
+                return {range_access::begin_cursor(derived(), 42)};
             }
             template<typename D = Derived, CONCEPT_REQUIRES_(Same<D, Derived>())>
             detail::facade_sentinel_t<D> end()
             {
-                return {range_access::end_cursor(derived())};
+                return {range_access::end_cursor(derived(), 42)};
             }
             /// \overload
             template<typename D = Derived, CONCEPT_REQUIRES_(Same<D, Derived>())>
             detail::facade_sentinel_t<D const> end() const
             {
-                return {range_access::end_cursor(derived())};
+                return {range_access::end_cursor(derived(), 42)};
             }
         };
 
         template<typename RangeFacade>
-        using range_facade_t = meta::eval<range_access::range_facade<RangeFacade>>;
+        using view_facade_t = meta::_t<range_access::view_facade<RangeFacade>>;
 
         /// @}
     }

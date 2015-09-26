@@ -16,8 +16,11 @@
 
 #include <atomic>
 #include <utility>
+#include <cstdlib>
 #include <type_traits>
 #include <range/v3/range_fwd.hpp>
+#include <range/v3/utility/get.hpp>
+#include <range/v3/utility/concepts.hpp>
 
 namespace ranges
 {
@@ -30,6 +33,7 @@ namespace ranges
         struct mutable_
         {
             mutable T value;
+            CONCEPT_REQUIRES(DefaultConstructible<T>())
             constexpr mutable_()
               : value{}
             {}
@@ -88,6 +92,10 @@ namespace ranges
             {
                 return value;
             }
+            T exchange(T desired)
+            {
+                return value.exchange(desired);
+            }
             operator std::atomic<T> &() const &
             {
                 return value;
@@ -112,22 +120,26 @@ namespace ranges
             {
                 return v;
             }
+            constexpr T exchange(T const &) const
+            {
+                return v;
+            }
         };
 
         static_assert(std::is_trivial<constant<int, 0>>::value, "Expected constant to be trivial");
 
-        template<typename Element, typename Tag, bool Empty = std::is_empty<Element>::value>
+        template<typename Element, typename Tag = Element, bool Empty = std::is_empty<Element>::value>
         struct box
         {
             Element value;
 
-            box()
+            CONCEPT_REQUIRES(DefaultConstructible<Element>())
+            constexpr box()
               : value{}
             {}
 
             template<typename E,
-                     typename std::enable_if<
-                         std::is_constructible<Element, E &&>::value, int>::type = 0>
+                CONCEPT_REQUIRES_(Constructible<Element, E &&>())>
             constexpr explicit box(E && e)
               : value(detail::forward<E>(e))
             {}
@@ -137,35 +149,19 @@ namespace ranges
         struct box<Element, Tag, true>
           : Element
         {
-            box() = default;
+            CONCEPT_REQUIRES(DefaultConstructible<Element>())
+            constexpr box()
+              : Element{}
+            {}
 
             template<typename E,
-                     typename std::enable_if<
-                         std::is_constructible<Element, E &&>::value, int>::type = 0>
+                CONCEPT_REQUIRES_(Constructible<Element, E &&>())>
             constexpr explicit box(E && e)
               : Element(detail::forward<E>(e))
             {}
         };
 
         // Get by tag type
-        template<typename Element>
-        Element & get(meta::eval<meta::id<Element>> & value)
-        {
-            return value;
-        }
-
-        template<typename Element>
-        Element const & get(meta::eval<meta::id<Element>> const & value)
-        {
-            return value;
-        }
-
-        template<typename Element>
-        Element && get(meta::eval<meta::id<Element>> && value)
-        {
-            return std::move(value);
-        }
-
         template<typename Tag, typename Element>
         Element & get(box<Element, Tag, false> & b)
         {

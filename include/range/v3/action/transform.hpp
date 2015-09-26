@@ -35,7 +35,7 @@ namespace ranges
             {
             private:
                 friend action_access;
-                template<typename F, typename P = ident, CONCEPT_REQUIRES_(!Iterable<F>())>
+                template<typename F, typename P = ident, CONCEPT_REQUIRES_(!Range<F>())>
                 static auto bind(transform_fn transform, F fun, P proj = P{})
                 RANGES_DECLTYPE_AUTO_RETURN
                 (
@@ -47,9 +47,9 @@ namespace ranges
                 {
                     template<typename Rng, typename F, typename P = ident,
                         typename I = range_iterator_t<Rng>>
-                    auto requires_(Rng rng, F f, P p = P{}) -> decltype(
+                        auto requires_(Rng&&, F&&, P&& = P{}) -> decltype(
                         concepts::valid_expr(
-                            concepts::model_of<concepts::InputIterable, Rng>(),
+                            concepts::model_of<concepts::InputRange, Rng>(),
                             concepts::is_true(Transformable1<I, I, F, P>())
                         ));
                 };
@@ -70,20 +70,20 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, F, P>())>
                 void operator()(Rng &&, F &&, P && = P{}) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
                         "The object on which action::transform operates must be a model of the "
-                        "InputIterable concept.");
+                        "InputRange concept.");
                     using I = range_iterator_t<Rng>;
-                    CONCEPT_ASSERT_MSG(Projectable<I, P>(),
+                    CONCEPT_ASSERT_MSG(IndirectCallable<P, I>(),
                         "The projection function must accept objects of the iterator's value type, "
-                        "reference type, and rvalue reference type.");
-                    CONCEPT_ASSERT_MSG(IndirectInvokable<F, Project<I, P>>(),
+                        "reference type, and common reference type.");
+                    CONCEPT_ASSERT_MSG(IndirectCallable<F, Projected<I, P>>(),
                         "The function argument to action::transform must be callable with "
                         "the result of the projection argument, or with objects of the range's "
                         "common reference type if no projection is specified.");
                     CONCEPT_ASSERT_MSG(Writable<range_iterator_t<Rng>,
-                            concepts::Invokable::result_t<F,
-                                concepts::Invokable::result_t<P, range_common_reference_t<Rng>>>>(),
+                            concepts::Callable::result_t<F,
+                                concepts::Callable::result_t<P, range_common_reference_t<Rng>>>>(),
                         "The result type of the function passed to action::transform must "
                         "be writable back into the source range.");
                 }

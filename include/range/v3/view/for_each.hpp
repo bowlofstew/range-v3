@@ -15,8 +15,10 @@
 #define RANGES_V3_VIEW_FOR_EACH_HPP
 
 #include <utility>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/view/view.hpp>
+#include <range/v3/view/all.hpp>
 #include <range/v3/view/join.hpp>
 #include <range/v3/view/generate_n.hpp>
 #include <range/v3/view/repeat_n.hpp>
@@ -36,8 +38,8 @@ namespace ranges
           : join_view<transform_view<Rng, F>>
         {
             for_each_view() = default;
-            for_each_view(Rng && rng, F f)
-              : join_view<transform_view<Rng, F>>{{std::forward<Rng>(rng), std::move(f)}}
+            for_each_view(Rng rng, F f)
+              : join_view<transform_view<Rng, F>>{{std::move(rng), std::move(f)}}
             {}
         };
 
@@ -56,15 +58,15 @@ namespace ranges
             public:
                 template<typename Rng, typename F>
                 using Concept = meta::and_<
-                    Iterable<Rng>,
-                    IndirectInvokable<F, range_iterator_t<Rng>>,
-                    Iterable<concepts::Invokable::result_t<F, range_common_reference_t<Rng>>>>;
+                    Range<Rng>,
+                    IndirectCallable<F, range_iterator_t<Rng>>,
+                    Range<concepts::Callable::result_t<F, range_common_reference_t<Rng>>>>;
 
                 template<typename Rng, typename F,
                     CONCEPT_REQUIRES_(Concept<Rng, F>())>
-                for_each_view<Rng, F> operator()(Rng && rng, F f) const
+                for_each_view<all_t<Rng>, F> operator()(Rng && rng, F f) const
                 {
-                    return {std::forward<Rng>(rng), std::move(f)};
+                    return {all(std::forward<Rng>(rng)), std::move(f)};
                 }
 
             #ifndef RANGES_DOXYGEN_INVOKED
@@ -73,14 +75,14 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, F>())>
                 void operator()(Rng &&, F) const
                 {
-                    CONCEPT_ASSERT_MSG(Iterable<Rng>(),
-                        "Rng is not a model of the Iterable concept.");
-                    CONCEPT_ASSERT_MSG(IndirectInvokable<F, range_iterator_t<Rng>>(),
+                    CONCEPT_ASSERT_MSG(Range<Rng>(),
+                        "Rng is not a model of the Range concept.");
+                    CONCEPT_ASSERT_MSG(IndirectCallable<F, range_iterator_t<Rng>>(),
                         "The function F is not callable with arguments of the type of the range's "
                         "common reference type.");
-                    CONCEPT_ASSERT_MSG(Iterable<concepts::Invokable::result_t<F,
+                    CONCEPT_ASSERT_MSG(Range<concepts::Callable::result_t<F,
                         range_common_reference_t<Rng>>>(),
-                        "To use view::for_each, the function F must return a model of the Iterable "
+                        "To use view::for_each, the function F must return a model of the Range "
                         "concept.");
                 }
             #endif
@@ -112,7 +114,7 @@ namespace ranges
 
         struct yield_from_fn
         {
-            template<typename Rng, CONCEPT_REQUIRES_(Range<Rng>())>
+            template<typename Rng, CONCEPT_REQUIRES_(View<Rng>())>
             Rng operator()(Rng rng) const
             {
                 return rng;
@@ -163,9 +165,9 @@ namespace ranges
         /// \cond
         template<typename Rng, typename Fun,
             typename Result = concepts::Function::result_t<Fun, range_common_reference_t<Rng>>,
-            CONCEPT_REQUIRES_(Iterable<Rng>() &&
+            CONCEPT_REQUIRES_(Range<Rng>() &&
                               Function<Fun, range_common_reference_t<Rng>>() &&
-                              Iterable<Result>())>
+                              Range<Result>())>
         auto operator >>= (Rng && rng, Fun fun) ->
             decltype(view::for_each(std::forward<Rng>(rng), std::move(fun)))
         {

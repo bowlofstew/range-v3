@@ -25,17 +25,16 @@ int main()
     std::vector<std::string> vs{"'allo", "'allo", "???"};
 
     auto x = vs | view::move;
-    CONCEPT_ASSERT(Same<bounded_range_concept_t<decltype(x)>, concepts::BoundedRange>());
-    CONCEPT_ASSERT(Same<sized_range_concept_t<decltype(x)>, concepts::SizedRange>());
-    ::models<concepts::BoundedRange>(x);
-    ::models<concepts::SizedRange>(x);
-    ::models<concepts::InputIterator>(x.begin());
-    ::models_not<concepts::ForwardIterator>(x.begin());
+    CONCEPT_ASSERT(Same<bounded_view_concept_t<decltype(x)>, concepts::BoundedView>());
+    CONCEPT_ASSERT(Same<sized_view_concept_t<decltype(x)>, concepts::SizedView>());
+    ::models<concepts::BoundedView>(x);
+    ::models<concepts::SizedView>(x);
+    ::models<concepts::RandomAccessIterator>(x.begin());
     using I = decltype(x.begin());
-    CONCEPT_ASSERT(Same<iterator_concept_t<I>, concepts::InputIterator>());
-    CONCEPT_ASSERT(Same<iterator_category_t<I>, ranges::input_iterator_tag>());
+    CONCEPT_ASSERT(Same<iterator_concept_t<I>, concepts::RandomAccessIterator>());
+    CONCEPT_ASSERT(Same<iterator_category_t<I>, ranges::random_access_iterator_tag>());
 
-    CHECK(std::strcmp(x.begin()->c_str(), "'allo") == 0);
+    CHECK(std::strcmp((*x.begin()).c_str(), "'allo") == 0);
 
     std::vector<std::string> vs2(x.begin(), x.end());
     static_assert(std::is_same<std::string&&, decltype(*x.begin())>::value, "");

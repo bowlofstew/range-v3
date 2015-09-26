@@ -17,6 +17,7 @@
 #include <utility>
 #include <iterator>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -39,7 +40,7 @@ namespace ranges
         using range_difference_t = concepts::Range::difference_t<Rng>;
 
         template<typename Rng>
-        using range_size_t = meta::eval<std::make_unsigned<range_difference_t<Rng>>>;
+        using range_size_t = meta::_t<std::make_unsigned<range_difference_t<Rng>>>;
 
         template<typename Rng>
         using range_value_t = concepts::InputRange::value_t<Rng>;
@@ -57,86 +58,65 @@ namespace ranges
         using range_category_t = concepts::InputRange::category_t<Rng>;
 
         template<typename Rng>
-        using range_pointer_t = concepts::InputRange::pointer_t<Rng>;
+        using range_common_iterator_t = common_iterator<range_iterator_t<Rng>, range_sentinel_t<Rng>>;
 
         template<typename Rng>
-        using range_common_iterator_t = common_iterator<range_iterator_t<Rng>, range_sentinel_t<Rng>>;
+        using range_safe_iterator_t = decltype(ranges::safe_begin(std::declval<Rng>()));
+
+        template<typename Rng>
+        using range_safe_sentinel_t = decltype(ranges::safe_end(std::declval<Rng>()));
 
         // Metafunctions
         template<typename Rng>
-        struct range_iterator
-        {
-            using type = range_iterator_t<Rng>;
-        };
+        using range_iterator = meta::defer<range_iterator_t, Rng>;
 
         template<typename Rng>
-        struct range_sentinel
-        {
-            using type = range_sentinel_t<Rng>;
-        };
+        using range_sentinel = meta::defer<range_sentinel_t, Rng>;
 
         template<typename Rng>
-        struct range_category
-        {
-            using type = range_category_t<Rng>;
-        };
+        using range_category = meta::defer<range_category_t, Rng>;
 
         template<typename Rng>
-        struct range_value
-        {
-            using type = range_value_t<Rng>;
-        };
+        using range_value = meta::defer<range_value_t, Rng>;
 
         template<typename Rng>
-        struct range_difference
-        {
-            using type = range_difference_t<Rng>;
-        };
+        using range_difference = meta::defer<range_difference_t, Rng>;
 
         template<typename Rng>
-        struct range_pointer
-        {
-            using type = range_pointer_t<Rng>;
-        };
+        using range_reference = meta::defer<range_reference_t, Rng>;
 
         template<typename Rng>
-        struct range_reference
-        {
-            using type = range_reference_t<Rng>;
-        };
+        using range_rvalue_reference = meta::defer<range_rvalue_reference_t, Rng>;
 
         template<typename Rng>
-        struct range_rvalue_reference
-        {
-            using type = range_rvalue_reference_t<Rng>;
-        };
+        using range_common_reference = meta::defer<range_common_reference_t, Rng>;
 
         template<typename Rng>
-        struct range_common_reference
-        {
-            using type = range_common_reference_t<Rng>;
-        };
+        using range_size = meta::defer<range_size_t, Rng>;
 
-        template<typename Rng>
-        struct range_size
+        /// \cond
+        namespace detail
         {
-            using type = range_size_t<Rng>;
-        };
+            std::integral_constant<cardinality, finite> test_cardinality(void *);
+            template<cardinality Card>
+            std::integral_constant<cardinality, Card> test_cardinality(basic_view<Card> *);
+        }
+        /// \endcond
 
-        // User customization point for infinite ranges:
+        // User customization point for specifying the cardinality of ranges:
         template<typename Rng, typename Void /*= void*/>
-        struct is_infinite
-          : std::is_base_of<basic_range<true>, Rng>
+        struct range_cardinality
+          : decltype(detail::test_cardinality(static_cast<Rng *>(nullptr)))
         {};
 
         template<typename Rng>
-        struct is_infinite<Rng &>
-          : is_infinite<Rng>
+        struct range_cardinality<Rng &>
+          : range_cardinality<Rng>
         {};
 
         template<typename Rng>
-        struct is_infinite<Rng const>
-          : is_infinite<Rng>
+        struct range_cardinality<Rng const>
+          : range_cardinality<Rng>
         {};
 
         /// @}

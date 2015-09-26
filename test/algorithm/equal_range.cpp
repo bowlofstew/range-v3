@@ -33,6 +33,23 @@
 #include "../simple_test.hpp"
 #include "../test_iterators.hpp"
 
+struct my_int
+{
+    int value;
+};
+
+bool compare(my_int lhs, my_int rhs)
+{
+    return lhs.value < rhs.value;
+}
+
+void not_totally_ordered()
+{
+    // This better compile!
+    std::vector<my_int> vec;
+    ranges::equal_range(vec, my_int{10}, compare);
+}
+
 template <class Iter, class Sent, class T>
 void
 test(Iter first, Sent last, const T& value)
@@ -45,6 +62,16 @@ test(Iter first, Sent last, const T& value)
     for (Iter j = first; j != i.end(); ++j)
         CHECK(!(value < *j));
     for (Iter j = i.end(); j != last; ++j)
+        CHECK(value < *j);
+
+    auto res = ranges::equal_range(ranges::make_range(first, last), value);
+    for (Iter j = first; j != res.get_unsafe().begin(); ++j)
+        CHECK(*j < value);
+    for (Iter j = res.get_unsafe().begin(); j != last; ++j)
+        CHECK(!(*j < value));
+    for (Iter j = first; j != res.get_unsafe().end(); ++j)
+        CHECK(!(value < *j));
+    for (Iter j = res.get_unsafe().end(); j != last; ++j)
         CHECK(value < *j);
 }
 

@@ -21,7 +21,6 @@
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/algorithm/heap_algorithm.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -38,8 +37,8 @@ namespace ranges
                 CONCEPT_REQUIRES_(Sortable<I, C, P>() && RandomAccessIterator<I>() && IteratorRange<I, S>())>
             I operator()(I begin, I middle, S end, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto && pred = invokable(pred_);
-                auto && proj = invokable(proj_);
+                auto && pred = as_function(pred_);
+                auto && proj = as_function(proj_);
 
                 make_heap(begin, middle, std::ref(pred), std::ref(proj));
                 auto const len = middle - begin;
@@ -58,10 +57,12 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Sortable<I, C, P>() && RandomAccessIterable<Rng &>())>
-            I operator()(Rng & rng, I middle, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(Sortable<I, C, P>() && RandomAccessRange<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, I middle, C pred = C{},
+                P proj = P{}) const
             {
-                return (*this)(begin(rng), std::move(middle), end(rng), std::move(pred), std::move(proj));
+                return (*this)(begin(rng), std::move(middle), end(rng), std::move(pred),
+                    std::move(proj));
             }
         };
 
@@ -69,7 +70,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& partial_sort = static_const<partial_sort_fn>::value;
+            constexpr auto&& partial_sort = static_const<with_braced_init_args<partial_sort_fn>>::value;
         }
 
         /// @}

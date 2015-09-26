@@ -15,11 +15,11 @@
 #define RANGES_V3_ACTION_CONCEPTS_HPP
 
 #include <utility>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/range_concepts.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/meta.hpp>
 
 namespace ranges
 {
@@ -48,14 +48,14 @@ namespace ranges
         {
             // std::array is a SemiContainer, native arrays are not.
             struct SemiContainer
-              : refines<ForwardIterable>
+              : refines<ForwardRange>
             {
                 template<typename T>
-                auto requires_(T t) -> decltype(
+                auto requires_(T&&) -> decltype(
                     concepts::valid_expr(
                         concepts::model_of<DefaultConstructible, uncvref_t<T>>(),
                         concepts::model_of<Movable, uncvref_t<T>>(),
-                        concepts::is_false(is_range<T>())
+                        concepts::is_false(is_view<T>())
                     ));
             };
 
@@ -64,7 +64,7 @@ namespace ranges
               : refines<SemiContainer>
             {
                 template<typename T, typename I = detail::movable_input_iterator<range_value_t<T>>>
-                auto requires_(T t) -> decltype(
+                auto requires_(T&&) -> decltype(
                     concepts::valid_expr(
                         concepts::model_of<Constructible, uncvref_t<T>, I, I>()
                     ));
@@ -76,6 +76,45 @@ namespace ranges
 
         template<typename T>
         using Container = concepts::models<concepts::Container, T>;
+
+        namespace concepts
+        {
+            struct Reservable
+              : refines<Container>
+            {
+                template <typename C>
+                using size_type =
+                    decltype(std::declval<const C&>().size());
+
+                template <typename C, typename S = size_type<C>>
+                auto requires_(C&& c, S&& s = S{}) -> decltype(
+                    concepts::valid_expr(
+                        concepts::model_of<Integral, S>(),
+                        ((void)c.reserve(s), 42)
+                    ));
+            };
+
+            struct ReserveAndAssignable
+              : refines<Reservable(_1), InputIterator(_2)>
+            {
+                template <typename C, typename I>
+                auto requires_(C&& c, I&& i) -> decltype(
+                    concepts::valid_expr(
+                        ((void)c.assign(i, i), 42)
+                    ));
+            };
+        }
+
+        template <typename C>
+        using Reservable = concepts::models<concepts::Reservable, C>;
+
+        template <typename C, typename I>
+        using ReserveAndAssignable =
+            concepts::models<concepts::ReserveAndAssignable, C, I>;
+
+        template <typename C>
+        using RandomAccessReservable =
+            meta::fast_and<Reservable<C>, RandomAccessRange<C>>;
 
         /// \cond
         namespace detail
@@ -94,10 +133,10 @@ namespace ranges
         namespace concepts
         {
             struct LvalueContainerLike
-              : refines<ForwardIterable>
+              : refines<ForwardRange>
             {
                 template<typename T>
-                auto requires_(T t) -> decltype(
+                auto requires_(T&& t) -> decltype(
                     concepts::valid_expr(
                         detail::is_lvalue_container_like(std::forward<T>(t))
                     ));

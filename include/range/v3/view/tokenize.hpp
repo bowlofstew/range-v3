@@ -20,10 +20,10 @@
 #include <type_traits>
 #include <initializer_list>
 #include <range/v3/range_fwd.hpp>
-#include <range/v3/range_interface.hpp>
+#include <range/v3/view_interface.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/all.hpp>
 
@@ -35,29 +35,32 @@ namespace ranges
         /// @{
         template<typename Rng, typename Regex, typename SubMatchRange>
         struct tokenize_view
-          : range_interface<tokenize_view<Rng, Regex, SubMatchRange>>
+          : view_interface<
+                tokenize_view<Rng, Regex, SubMatchRange>,
+                is_finite<Rng>::value ? finite : range_cardinality<Rng>::value>
         {
         private:
-            using base_range_t = view::all_t<Rng>;
-            base_range_t rng_;
+            Rng rng_;
             Regex rex_;
             SubMatchRange subs_;
             std::regex_constants::match_flag_type flags_;
         public:
             using iterator =
-                std::regex_token_iterator<range_iterator_t<base_range_t>>;
+                std::regex_token_iterator<range_iterator_t<Rng>>;
 
             tokenize_view() = default;
-            tokenize_view(Rng &&rng, Regex && rex, SubMatchRange subs,
+            tokenize_view(Rng rng, Regex && rex, SubMatchRange subs,
                 std::regex_constants::match_flag_type flags)
-              : rng_(view::all(std::forward<Rng>(rng)))
-              , rex_(std::forward<Regex>(rex)), subs_(std::move(subs)), flags_(flags)
+              : rng_(std::move(rng))
+              , rex_(std::forward<Regex>(rex))
+              , subs_(std::move(subs))
+              , flags_(flags)
             {}
             iterator begin()
             {
                 return {ranges::begin(rng_), ranges::end(rng_), rex_, subs_, flags_};
             }
-            CONCEPT_REQUIRES(Range<base_range_t const>())
+            CONCEPT_REQUIRES(View<Rng const>())
             iterator begin() const
             {
                 return {ranges::begin(rng_), ranges::end(rng_), rex_, subs_, flags_};
@@ -66,11 +69,11 @@ namespace ranges
             {
                 return {};
             }
-            base_range_t & base()
+            Rng & base()
             {
                 return rng_;
             }
-            base_range_t const & base() const
+            Rng const & base() const
             {
                 return rng_;
             }
@@ -81,47 +84,47 @@ namespace ranges
             struct tokenizer_impl_fn
             {
                 template<typename Rng, typename Regex>
-                tokenize_view<Rng, Regex, int>
+                tokenize_view<all_t<Rng>, Regex, int>
                 operator()(Rng && rng, Regex && rex, int sub = 0,
                     std::regex_constants::match_flag_type flags =
                         std::regex_constants::match_default) const
                 {
-                    CONCEPT_ASSERT(BidirectionalIterable<Rng>());
-                    CONCEPT_ASSERT(BoundedIterable<Rng>());
+                    CONCEPT_ASSERT(BidirectionalRange<Rng>());
+                    CONCEPT_ASSERT(BoundedRange<Rng>());
                     static_assert(std::is_same<range_value_t<Rng>,
                         typename std::remove_reference<Regex>::type::value_type>::value,
                         "The character range and the regex have different character types");
-                    return {std::forward<Rng>(rng), std::forward<Regex>(rex), sub,
+                    return {all(std::forward<Rng>(rng)), std::forward<Regex>(rex), sub,
                             flags};
                 }
 
                 template<typename Rng, typename Regex>
-                tokenize_view<Rng, Regex, std::vector<int>>
+                tokenize_view<all_t<Rng>, Regex, std::vector<int>>
                 operator()(Rng && rng, Regex && rex, std::vector<int> subs,
                     std::regex_constants::match_flag_type flags =
                         std::regex_constants::match_default) const
                 {
-                    CONCEPT_ASSERT(BidirectionalIterable<Rng>());
-                    CONCEPT_ASSERT(BoundedIterable<Rng>());
+                    CONCEPT_ASSERT(BidirectionalRange<Rng>());
+                    CONCEPT_ASSERT(BoundedRange<Rng>());
                     static_assert(std::is_same<range_value_t<Rng>,
                         typename std::remove_reference<Regex>::type::value_type>::value,
                         "The character range and the regex have different character types");
-                    return {std::forward<Rng>(rng), std::forward<Regex>(rex),
+                    return {all(std::forward<Rng>(rng)), std::forward<Regex>(rex),
                             std::move(subs), flags};
                 }
 
                 template<typename Rng, typename Regex>
-                tokenize_view<Rng, Regex, std::initializer_list<int>>
+                tokenize_view<all_t<Rng>, Regex, std::initializer_list<int>>
                 operator()(Rng && rng, Regex && rex,
                     std::initializer_list<int> subs, std::regex_constants::match_flag_type flags =
                         std::regex_constants::match_default) const
                 {
-                    CONCEPT_ASSERT(BidirectionalIterable<Rng>());
-                    CONCEPT_ASSERT(BoundedIterable<Rng>());
+                    CONCEPT_ASSERT(BidirectionalRange<Rng>());
+                    CONCEPT_ASSERT(BoundedRange<Rng>());
                     static_assert(std::is_same<range_value_t<Rng>,
                         typename std::remove_reference<Regex>::type::value_type>::value,
                         "The character range and the regex have different character types");
-                    return {std::forward<Rng>(rng), std::forward<Regex>(rex),
+                    return {all(std::forward<Rng>(rng)), std::forward<Regex>(rex),
                             std::move(subs), flags};
                 }
 

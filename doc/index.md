@@ -136,7 +136,7 @@ Same as above, but with function-call syntax instead of pipe syntax:
 
 ## Create Custom Ranges
 
-Range v3 provides a utility for easily creating your own range types, called `range_facade`. The code below uses `range_facade` to create a range that traverses a null-terminated string:
+Range v3 provides a utility for easily creating your own range types, called `view_facade`. The code below uses `view_facade` to create a range that traverses a null-terminated string:
 
 ~~~~~~~{.cpp}
     #include <range/v3/all.hpp>
@@ -145,7 +145,7 @@ Range v3 provides a utility for easily creating your own range types, called `ra
     // A range that iterates over all the characters in a
     // null-terminated string.
     class c_string_range
-      : public range_facade<c_string_range>
+      : public view_facade<c_string_range>
     {
         friend range_access;
         char const * sz_;
@@ -161,7 +161,7 @@ Range v3 provides a utility for easily creating your own range types, called `ra
     };
 ~~~~~~~
 
-The `range_facade` class generates an iterator and begin/end member functions from the minimal interface provided by `c_string_range`. This is an example of a very simple range for which it is not necessary to separate the range itself from the thing that iterates the range. Future examples will show examples of more sophisticated ranges.
+The `view_facade` class generates an iterator and begin/end member functions from the minimal interface provided by `c_string_range`. This is an example of a very simple range for which it is not necessary to separate the range itself from the thing that iterates the range. Future examples will show examples of more sophisticated ranges.
 
 With `c_string_range`, you can now use algorithms to operate on null-terminated strings, as below:
 
@@ -181,14 +181,14 @@ With `c_string_range`, you can now use algorithms to operate on null-terminated 
 
 ## Adapting Ranges
 
-Often, a new range type is most easily expressed by adapting an existing range type. That's the case for many of the range views provided by the Range v3 library; for example, the `view::remove_if` and `view::transform` views. These are rich types with many moving parts, but thanks to a helper class called `range_adaptor`, they aren't hard to write.
+Often, a new range type is most easily expressed by adapting an existing range type. That's the case for many of the range views provided by the Range v3 library; for example, the `view::remove_if` and `view::transform` views. These are rich types with many moving parts, but thanks to a helper class called `view_adaptor`, they aren't hard to write.
 
 Below in roughly 2 dozen lines of code is the `transform` view, which takes one range and transforms all the elements with a unary function.
 
 ~~~~~~~{.cpp}
     // A class that adapts an existing range with a function
     template<class Rng, class Fun>
-    class transform_view : public range_adaptor<transform_view<Rng, Fun>, Rng>
+    class transform_view : public view_adaptor<transform_view<Rng, Fun>, Rng>
     {
         friend range_access;
         semiregular_t<Fun> fun_; // Make Fun model SemiRegular if it doesn't
@@ -209,7 +209,7 @@ Below in roughly 2 dozen lines of code is the `transform` view, which takes one 
     public:
         transform_view() = default;
         transform_view(Rng && rng, Fun fun)
-          : range_adaptor_t<transform_view>{std::forward<Rng>(rng)}
+          : view_adaptor_t<transform_view>{std::forward<Rng>(rng)}
           , fun_(std::move(fun))
         {}
     };
@@ -255,11 +255,11 @@ For instance, if you would like to write a function that takes an iterator/senti
     }
 ~~~~~~~
 
-You can then add an overload that take an Iterable:
+You can then add an overload that take a Range:
 
 ~~~~~~~{.cpp}
     template<class Rng, class Comp = /*...some_default..*/,
-        CONCEPT_REQUIRES_(Iterable<Rng>())>
+        CONCEPT_REQUIRES_(Range<Rng>())>
     void my_algorithm(Rng && rng, Comp comp = Comp{})
     {
         return my_algorithm(ranges::begin(rng), ranges::end(rng));
@@ -283,12 +283,14 @@ The big advantage of ranges over iterators is their *composability*. They permit
 Below is a list of the lazy range combinators, or *views*, that Range v3 provides, and a blurb about how each is intended to be used.
 
 <DL>
-<DT>\link ranges::v3::view::adjacent_filter_fn `view::adjacent_filter`\endlink</DT>
-  <DD>For each pair of adjacent elements in a source range, evaluate the specified binary predicate. If the predicate evaluates to true, the first element of the pair is included in the result range; otherwise, it is skipped. The first element in the source range is always included. (For instance, `adjacent_filter` with `std::not_equal_to` filters out all the non-unique elements.)</DD>
+<DT>\link ranges::v3::view::adjacent_remove_if_fn `view::adjacent_remove_if`\endlink</DT>
+  <DD>For each pair of adjacent elements in a source range, evaluate the specified binary predicate. If the predicate evaluates to false, the first element of the pair is included in the result range; otherwise, it is skipped. The first element in the source range is always included. (For instance, `adjacent_remove_if` with `std::equal_to` filters out all the non-unique elements.)</DD>
 <DT>\link ranges::v3::view::all_fn `view::all`\endlink</DT>
   <DD>Return a range containing all the elements in the source. Useful for converting containers to ranges.</DD>
 <DT>\link ranges::v3::view::bounded_fn `view::bounded`\endlink</DT>
   <DD>Convert the source range to a *bounded* range, where the type of the `end` is the same as the `begin`. Useful for iterating over a range with C++'s range-based `for` loop.</DD>
+<DT>\link ranges::v3::view::chunk_fn `view::chunk`\endlink</DT>
+  <DD>Given a source range and an integer *N*, produce a range of contiguous ranges where each inner range has *N* contiguous elements. The final range may have fewer than *N* elements.</DD>
 <DT>\link ranges::v3::view::concat_fn `view::concat`\endlink</DT>
   <DD>Given *N* source ranges, produce a result range that is the concatenation of all of them.</DD>
 <DT>\link ranges::v3::view::const_fn `view::const_`\endlink</DT>
@@ -314,9 +316,9 @@ Below is a list of the lazy range combinators, or *views*, that Range v3 provide
 <DT>\link ranges::v3::view::intersperse_fn `view::intersperse`\endlink</DT>
   <DD>Given a source range and a value, return a new range where the value is inserted between contiguous elements from the source.</DD>
 <DT>\link ranges::v3::view::ints_fn `view::ints`\endlink</DT>
-  <DD>Generate a range of monotonically increasing `int`s. When used without arguments, it generates the quasi-infinite range [0,1,2,3...]. It can also be called with a lower bound, or with a lower and upper bound (inclusive).</DD>
+  <DD>Generate a range of monotonically increasing `int`s. When used without arguments, it generates the quasi-infinite range [0,1,2,3...]. It can also be called with a lower bound, or with a lower and upper bound (exclusive).</DD>
 <DT>\link ranges::v3::view::iota_fn `view::iota`\endlink</DT>
-  <DD>A generalization of `view::ints` that generates a sequence of monotonically increasing values of any incrementable type.</DD>
+  <DD>A generalization of `view::ints` that generates a sequence of monotonically increasing values of any incrementable type. When specified with a single argument, the result is an infinite range beginning at the specified value. With two arguments, the values are assumed to denote a half-open range.</DD>
 <DT>\link ranges::v3::view::join_fn `view::join`\endlink</DT>
   <DD>Given a range of ranges, join them into a flattened sequence of elements. Optionally, you can specify a value or a range to be inserted between each source range.</DD>
 <DT>\link ranges::v3::view::keys_fn `view::keys`\endlink</DT>
@@ -348,7 +350,9 @@ Below is a list of the lazy range combinators, or *views*, that Range v3 provide
 <DT>\link ranges::v3::view::tail_fn `view::tail`\endlink</DT>
   <DD>Given a source range, return a new range without the first element. The range must have at least one element.</DD>
 <DT>\link ranges::v3::view::take_fn `view::take`\endlink</DT>
-  <DD>Given a source range and an integral count, return a range consisting of the first *count* elements from the source range. The source range must have at least that many elements.</DD>
+  <DD>Given a source range and an integral count, return a range consisting of the first *count* elements from the source range, or the complete range if it has fewer elements. (The result of `view::take` is not a `SizedRange`.)</DD>
+<DT>\link ranges::v3::view::take_exactly_fn `view::take_exactly`\endlink</DT>
+  <DD>Given a source range and an integral count, return a range consisting of the first *count* elements from the source range. The source range must have at least that many elements. (The result of `view::take_exactly` is a `SizedRange`.)</DD>
 <DT>\link ranges::v3::view::take_while_fn `view::take_while`\endlink</DT>
   <DD>Given a source range and a unary predicate, return a new range consisting of the  elements from the front that satisfy the predicate.</DD>
 <DT>\link ranges::v3::view::tokenize_fn `view::tokenize`\endlink</DT>

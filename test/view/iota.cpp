@@ -40,35 +40,41 @@ int main()
 
     ::check_equal(view::ints | view::take(10), {0,1,2,3,4,5,6,7,8,9});
     ::check_equal(view::ints(0) | view::take(10), {0,1,2,3,4,5,6,7,8,9});
-    ::check_equal(view::ints(0,9), {0,1,2,3,4,5,6,7,8,9});
-    ::check_equal(view::ints(1,10), {1,2,3,4,5,6,7,8,9,10});
+    ::check_equal(view::ints(0,9), {0,1,2,3,4,5,6,7,8});
+    ::check_equal(view::closed_ints(0,9), {0,1,2,3,4,5,6,7,8,9});
+    ::check_equal(view::ints(1,10), {1,2,3,4,5,6,7,8,9});
+    ::check_equal(view::closed_ints(1,10), {1,2,3,4,5,6,7,8,9,10});
 
     auto chars = view::ints(std::numeric_limits<char>::min(),
-                           std::numeric_limits<char>::max());
+                            std::numeric_limits<char>::max());
     static_assert(Same<int, range_difference_t<decltype(chars)>>(), "");
-    ::models<concepts::RandomAccessRange>(chars);
+    ::models<concepts::RandomAccessView>(chars);
+    models<concepts::BoundedView>(chars);
 
     auto shorts = view::ints(std::numeric_limits<unsigned short>::min(),
-                           std::numeric_limits<unsigned short>::max());
+                             std::numeric_limits<unsigned short>::max());
+    models<concepts::BoundedView>(shorts);
     static_assert(Same<int, range_difference_t<decltype(shorts)>>(), "");
 
-    auto uints = view::ints(
+    auto uints = view::closed_ints(
         std::numeric_limits<std::uint32_t>::min(),
         std::numeric_limits<std::uint32_t>::max());
+    models<concepts::BoundedView>(uints);
     static_assert(Same<std::int64_t, range_difference_t<decltype(uints)>>(), "");
     static_assert(Same<std::uint64_t, range_size_t<decltype(uints)>>(), "");
-    CHECK((static_cast<uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1) == uints.size());
+    CHECK(uints.size() == (static_cast<uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1));
 
-    auto ints = view::ints(
+    auto ints = view::closed_ints(
         std::numeric_limits<std::int32_t>::min(),
         std::numeric_limits<std::int32_t>::max());
     static_assert(Same<std::int64_t, range_difference_t<decltype(ints)>>(), "");
     static_assert(Same<std::uint64_t, range_size_t<decltype(ints)>>(), "");
-    CHECK((static_cast<uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1) == ints.size());
+    CHECK(ints.size() == (static_cast<uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1));
 
     {
-        auto ints = view::iota(Int{0}, Int{10});
+        auto ints = view::closed_iota(Int{0}, Int{10});
         ::check_equal(ints, {Int{0},Int{1},Int{2},Int{3},Int{4},Int{5},Int{6},Int{7},Int{8},Int{9},Int{10}});
+        models_not<concepts::BoundedView>(ints);
     }
 
     return ::test_result();

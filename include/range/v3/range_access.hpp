@@ -16,8 +16,8 @@
 
 #include <cstddef>
 #include <utility>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
-#include <range/v3/utility/meta.hpp>
 #include <range/v3/utility/concepts.hpp>
 
 namespace ranges
@@ -37,7 +37,7 @@ namespace ranges
             struct InputCursorConcept
             {
                 template<typename T>
-                auto requires_(T && t) -> decltype(
+                auto requires_(T&& t) -> decltype(
                     concepts::valid_expr(
                         //t.done(),
                         t.current(),
@@ -48,7 +48,7 @@ namespace ranges
               : concepts::refines<InputCursorConcept>
             {
                 template<typename T>
-                auto requires_(T && t) -> decltype(
+                auto requires_(T&& t) -> decltype(
                     concepts::valid_expr(
                         concepts::convertible_to<bool>(t.equal(t))
                     ));
@@ -57,7 +57,7 @@ namespace ranges
               : concepts::refines<ForwardCursorConcept>
             {
                 template<typename T>
-                auto requires_(T && t) -> decltype(
+                auto requires_(T&& t) -> decltype(
                     concepts::valid_expr(
                         (t.prev(), concepts::void_)
                     ));
@@ -66,7 +66,7 @@ namespace ranges
               : concepts::refines<BidirectionalCursorConcept>
             {
                 template<typename T>
-                auto requires_(T && t) -> decltype(
+                auto requires_(T&& t) -> decltype(
                     concepts::valid_expr(
                         concepts::model_of<concepts::SignedIntegral>(t.distance_to(t)),
                         (t.advance(t.distance_to(t)), concepts::void_)
@@ -75,79 +75,111 @@ namespace ranges
             struct InfiniteCursorConcept
             {
                 template<typename T>
-                auto requires_(T && t) -> decltype(
+                auto requires_(T&&) -> decltype(
                     concepts::valid_expr(
                         concepts::is_true(typename T::is_infinite{})
                     ));
             };
 
             template<typename Rng>
-            static auto begin_cursor(Rng & rng) -> decltype(rng.begin_cursor())
-            {
-                return rng.begin_cursor();
-            }
+            static RANGES_CXX14_CONSTEXPR auto begin_cursor(Rng & rng, long)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                rng.begin_cursor()
+            )
             template<typename Rng>
-            static auto end_cursor(Rng & rng) -> decltype(rng.end_cursor())
-            {
-                return rng.end_cursor();
-            }
+            static RANGES_CXX14_CONSTEXPR auto begin_cursor(Rng & rng, int)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                static_cast<Rng const &>(rng).begin_cursor()
+            )
+            template<typename Rng>
+            static RANGES_CXX14_CONSTEXPR auto end_cursor(Rng & rng, long)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                rng.end_cursor()
+            )
+            template<typename Rng>
+            static RANGES_CXX14_CONSTEXPR auto end_cursor(Rng & rng, int)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                static_cast<Rng const &>(rng).end_cursor()
+            )
 
             template<typename Rng>
-            static auto begin_adaptor(Rng & rng) -> decltype(rng.begin_adaptor())
-            {
-                return rng.begin_adaptor();
-            }
+            static RANGES_CXX14_CONSTEXPR auto begin_adaptor(Rng & rng, long)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                rng.begin_adaptor()
+            )
             template<typename Rng>
-            static auto end_adaptor(Rng & rng) -> decltype(rng.end_adaptor())
-            {
-                return rng.end_adaptor();
-            }
+            static RANGES_CXX14_CONSTEXPR auto begin_adaptor(Rng & rng, int)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                static_cast<Rng const &>(rng).begin_adaptor()
+            )
+            template<typename Rng>
+            static RANGES_CXX14_CONSTEXPR auto end_adaptor(Rng & rng, long)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                rng.end_adaptor()
+            )
+            template<typename Rng>
+            static RANGES_CXX14_CONSTEXPR auto end_adaptor(Rng & rng, int)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                static_cast<Rng const &>(rng).end_adaptor()
+            )
 
             template<typename Cur>
-            static auto current(Cur const &pos) noexcept(noexcept(pos.current())) ->
-                decltype(pos.current())
-            {
-                return pos.current();
-            }
+            static RANGES_CXX14_CONSTEXPR auto current(Cur const &pos)
+            RANGES_DECLTYPE_AUTO_RETURN_NOEXCEPT
+            (
+                pos.current()
+            )
             template<typename Cur>
-            static auto next(Cur & pos) -> decltype(pos.next())
-            {
-                pos.next();
-            }
+            static RANGES_CXX14_CONSTEXPR auto next(Cur & pos)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                pos.next()
+            )
             template<typename Cur>
-            static constexpr auto done(Cur const & pos) -> decltype(pos.done())
-            {
-                return pos.done();
-            }
+            static constexpr auto done(Cur const & pos)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                pos.done()
+            )
             template<typename Cur>
-            static auto equal(Cur const &pos0, Cur const &pos1) ->
-                decltype(pos0.equal(pos1))
-            {
-                return pos0.equal(pos1);
-            }
+            static RANGES_CXX14_CONSTEXPR auto equal(Cur const &pos0, Cur const &pos1)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                pos0.equal(pos1)
+            )
             template<typename Cur, typename S>
-            static constexpr auto empty(Cur const &pos, S const &end) ->
-                decltype(end.equal(pos))
-            {
-                return end.equal(pos);
-            }
+            static constexpr auto empty(Cur const &pos, S const &end)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                end.equal(pos)
+            )
             template<typename Cur>
-            static auto prev(Cur & pos) -> decltype(pos.prev())
-            {
-                pos.prev();
-            }
+            static RANGES_CXX14_CONSTEXPR auto prev(Cur & pos)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                pos.prev()
+            )
             template<typename Cur, typename D>
-            static auto advance(Cur & pos, D n) ->
-                decltype(pos.advance(n))
-            {
-                pos.advance(n);
-            }
+            static RANGES_CXX14_CONSTEXPR auto advance(Cur & pos, D n)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                pos.advance(n)
+            )
             template<typename Cur>
-            static auto distance_to(Cur const &pos0, Cur const &pos1) ->
-                decltype(pos0.distance_to(pos1))
-            {
-                return pos0.distance_to(pos1);
-            }
+            RANGES_CXX14_CONSTEXPR
+            static auto distance_to(Cur const &pos0, Cur const &pos1)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                pos0.distance_to(pos1)
+            )
 
         private:
             template<typename Cur>
@@ -161,7 +193,7 @@ namespace ranges
             };
 
             template<typename Cur>
-            struct cursor_difference2<Cur, detail::void_t<random_access_cursor_difference_t<Cur>>>
+            struct cursor_difference2<Cur, meta::void_<random_access_cursor_difference_t<Cur>>>
             {
                 using type = random_access_cursor_difference_t<Cur>;
             };
@@ -172,7 +204,7 @@ namespace ranges
             {};
 
             template<typename Cur>
-            struct cursor_difference<Cur, detail::void_t<typename Cur::difference_type>>
+            struct cursor_difference<Cur, meta::void_<typename Cur::difference_type>>
             {
                 using type = typename Cur::difference_type;
             };
@@ -184,7 +216,7 @@ namespace ranges
             };
 
             template<typename Cur>
-            struct cursor_value<Cur, detail::void_t<typename Cur::value_type>>
+            struct cursor_value<Cur, meta::void_<typename Cur::value_type>>
             {
                 using type = typename Cur::value_type;
             };
@@ -196,7 +228,7 @@ namespace ranges
             };
 
             template<typename T>
-            struct single_pass<T, detail::void_t<typename T::single_pass>>
+            struct single_pass<T, meta::void_<typename T::single_pass>>
             {
                 using type = typename T::single_pass;
             };
@@ -211,12 +243,12 @@ namespace ranges
             using single_pass_t = typename single_pass<Cur>::type;
 
             template<typename Cur, typename S>
-            static Cur cursor(basic_iterator<Cur, S> it)
+            static RANGES_CXX14_CONSTEXPR Cur cursor(basic_iterator<Cur, S> it)
             {
                 return std::move(it.pos());
             }
             template<typename S>
-            static S sentinel(basic_sentinel<S> s)
+            static RANGES_CXX14_CONSTEXPR S sentinel(basic_sentinel<S> s)
             {
                 return std::move(s.end());
             }
@@ -232,14 +264,14 @@ namespace ranges
                 using type = typename RangeAdaptor::base_range_t const;
             };
             template<typename RangeFacade>
-            struct range_facade
+            struct view_facade
             {
-                using type = typename RangeFacade::range_facade_t;
+                using type = typename RangeFacade::view_facade_t;
             };
             template<typename RangeAdaptor>
-            struct range_adaptor
+            struct view_adaptor
             {
-                using type = typename RangeAdaptor::range_adaptor_t;
+                using type = typename RangeAdaptor::view_adaptor_t;
             };
             /// endcond
         };
@@ -278,7 +310,7 @@ namespace ranges
                         range_access::InputCursorConcept>, T>;
 
             template<typename T>
-            using cursor_concept_t = meta::eval<cursor_concept<T>>;
+            using cursor_concept_t = meta::_t<cursor_concept<T>>;
         }
         /// \endcond
     }

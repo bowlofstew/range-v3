@@ -15,13 +15,13 @@
 #define RANGES_V3_VIEW_ADJACENT_REMOVE_IF_HPP
 
 #include <utility>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
-#include <range/v3/range_adaptor.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/view_adaptor.hpp>
 #include <range/v3/utility/iterator.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
+#include <range/v3/utility/semiregular.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/algorithm/adjacent_find.hpp>
 #include <range/v3/view/view.hpp>
@@ -34,17 +34,19 @@ namespace ranges
         /// @{
         template<typename Rng, typename F>
         struct adjacent_remove_if_view
-          : range_adaptor<adjacent_remove_if_view<Rng, F>, Rng>
+          : view_adaptor<
+                adjacent_remove_if_view<Rng, F>,
+                Rng,
+                is_finite<Rng>::value ? finite : range_cardinality<Rng>::value>
         {
         private:
             friend range_access;
-            semiregular_invokable_t<F> pred_;
+            semiregular_t<function_type<F>> pred_;
 
             struct adaptor : adaptor_base
             {
             private:
                 adjacent_remove_if_view const *rng_;
-                using adaptor_base::prev;
             public:
                 adaptor() = default;
                 adaptor(adjacent_remove_if_view const &rng)
@@ -55,8 +57,9 @@ namespace ranges
                     auto const end = ranges::end(rng_->mutable_base());
                     RANGES_ASSERT(it != end);
                     it = adjacent_find(std::move(it), end, not_(std::ref(rng_->pred_)));
-                    advance_bounded(it, 1, end);
+                    ranges::advance(it, 1, end);
                 }
+                void prev() = delete;
             };
             adaptor begin_adaptor() const
             {
@@ -68,9 +71,9 @@ namespace ranges
             }
         public:
             adjacent_remove_if_view() = default;
-            adjacent_remove_if_view(Rng && rng, F pred)
-              : range_adaptor_t<adjacent_remove_if_view>{std::forward<Rng>(rng)}
-              , pred_(invokable(std::move(pred)))
+            adjacent_remove_if_view(Rng rng, F pred)
+              : view_adaptor_t<adjacent_remove_if_view>{std::move(rng)}
+              , pred_(as_function(std::move(pred)))
             {}
         };
 
@@ -90,24 +93,24 @@ namespace ranges
             public:
                 template<typename Rng, typename F>
                 using Concept = meta::and_<
-                    ForwardIterable<Rng>,
-                    IndirectInvokablePredicate<F, range_iterator_t<Rng>,
+                    ForwardRange<Rng>,
+                    IndirectCallablePredicate<F, range_iterator_t<Rng>,
                         range_iterator_t<Rng>>>;
 
                 template<typename Rng, typename F,
                     CONCEPT_REQUIRES_(Concept<Rng, F>())>
-                adjacent_remove_if_view<Rng, F> operator()(Rng && rng, F pred) const
+                adjacent_remove_if_view<all_t<Rng>, F> operator()(Rng && rng, F pred) const
                 {
-                    return {std::forward<Rng>(rng), std::move(pred)};
+                    return {all(std::forward<Rng>(rng)), std::move(pred)};
                 }
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Rng, typename F,
                     CONCEPT_REQUIRES_(!Concept<Rng, F>())>
                 void operator()(Rng &&, F) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
-                        "Rng must model the ForwardIterable concept");
-                    CONCEPT_ASSERT_MSG(IndirectInvokablePredicate<F, range_iterator_t<Rng>,
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
+                        "Rng must model the ForwardRange concept");
+                    CONCEPT_ASSERT_MSG(IndirectCallablePredicate<F, range_iterator_t<Rng>,
                         range_iterator_t<Rng>>(),
                         "Function F must be callable with two arguments of the range's common "
                         "reference type, and it must return something convertible to bool.");

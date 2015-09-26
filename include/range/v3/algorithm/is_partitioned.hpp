@@ -21,6 +21,7 @@
 #ifndef RANGES_V3_ALGORITHM_IS_PARTITIONED_HPP
 #define RANGES_V3_ALGORITHM_IS_PARTITIONED_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -28,7 +29,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/static_const.hpp>
 
 namespace ranges
@@ -39,7 +39,7 @@ namespace ranges
         template<typename I, typename C, typename P = ident>
         using IsPartitionedable = meta::fast_and<
             InputIterator<I>,
-            IndirectInvokablePredicate<C, Project<I, P>>>;
+            IndirectCallablePredicate<C, Projected<I, P>>>;
 
         /// \addtogroup group-algorithms
         /// @{
@@ -49,8 +49,8 @@ namespace ranges
                 CONCEPT_REQUIRES_(IsPartitionedable<I, C, P>() && IteratorRange<I, S>())>
             bool operator()(I begin, S end, C pred_, P proj_ = P{}) const
             {
-                auto && pred = invokable(pred_);
-                auto && proj = invokable(proj_);
+                auto && pred = as_function(pred_);
+                auto && proj = as_function(proj_);
                 for(; begin != end; ++begin)
                     if(!pred(proj(*begin)))
                         break;
@@ -62,7 +62,7 @@ namespace ranges
 
             template<typename Rng, typename C, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(IsPartitionedable<I, C, P>() && Iterable<Rng>())>
+                CONCEPT_REQUIRES_(IsPartitionedable<I, C, P>() && Range<Rng>())>
             bool operator()(Rng &&rng, C pred, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));

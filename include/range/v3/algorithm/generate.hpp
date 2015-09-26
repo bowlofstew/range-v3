@@ -20,6 +20,8 @@
 #include <range/v3/range_traits.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/static_const.hpp>
+#include <range/v3/utility/tagged_pair.hpp>
+#include <range/v3/algorithm/tagspec.hpp>
 
 namespace ranges
 {
@@ -33,7 +35,7 @@ namespace ranges
                 CONCEPT_REQUIRES_(Function<F>() &&
                     OutputIterator<O, concepts::Function::result_t<F>>() &&
                     IteratorRange<O, S>())>
-            std::pair<O, F> operator()(O begin, S end, F fun) const
+            tagged_pair<tag::out(O), tag::fun(F)> operator()(O begin, S end, F fun) const
             {
                 for(; begin != end; ++begin)
                     *begin = fun();
@@ -43,8 +45,9 @@ namespace ranges
             template<typename Rng, typename F,
                 typename O = range_iterator_t<Rng>,
                 CONCEPT_REQUIRES_(Function<F>() &&
-                    OutputIterable<Rng &, concepts::Function::result_t<F>>())>
-            std::pair<O, F> operator()(Rng & rng, F fun) const
+                    OutputRange<Rng, concepts::Function::result_t<F>>())>
+            tagged_pair<tag::out(range_safe_iterator_t<Rng>), tag::fun(F)>
+            operator()(Rng &&rng, F fun) const
             {
                 return (*this)(begin(rng), end(rng), std::move(fun));
             }
@@ -54,7 +57,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& generate = static_const<generate_fn>::value;
+            constexpr auto&& generate = static_const<with_braced_init_args<generate_fn>>::value;
         }
 
         /// @}

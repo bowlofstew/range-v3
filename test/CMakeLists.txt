@@ -14,11 +14,14 @@ add_subdirectory(view)
 add_executable(container_conversion container_conversion.cpp)
 add_test(test.container_conversion container_conversion)
 
-add_executable(range_facade range_facade.cpp)
-add_test(test.range_facade range_facade)
+add_executable(constexpr_core constexpr_core.cpp)
+add_test(test.constexpr_core constexpr_core)
 
-add_executable(range_adaptor range_adaptor.cpp)
-add_test(test.range_adaptor range_adaptor)
+add_executable(view_facade view_facade.cpp)
+add_test(test.view_facade view_facade)
+
+add_executable(view_adaptor view_adaptor.cpp)
+add_test(test.view_adaptor view_adaptor)
 
 add_executable(range range.cpp)
 add_test(test.range range)
@@ -31,3 +34,6 @@ add_test(test.distance distance)
 
 add_executable(to_container to_container.cpp)
 add_test(test.to_container, to_container)
+
+add_executable(getlines getlines.cpp)
+add_test(test.getlines, getlines)

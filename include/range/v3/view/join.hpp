@@ -16,15 +16,16 @@
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/size.hpp>
 #include <range/v3/numeric.hpp> // for accumulate
 #include <range/v3/begin_end.hpp>
+#include <range/v3/empty.hpp>
 #include <range/v3/range_traits.hpp>
-#include <range/v3/range_adaptor.hpp>
+#include <range/v3/view_adaptor.hpp>
 #include <range/v3/view/transform.hpp>
-#include <range/v3/utility/pipeable.hpp>
-#include <range/v3/utility/invokable.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/all.hpp>
 #include <range/v3/view/view.hpp>
@@ -34,18 +35,37 @@ namespace ranges
 {
     inline namespace v3
     {
+        /// \cond
+        namespace detail
+        {
+            // Compute the cardinality of a joined range
+            template<typename Outer, typename Inner, typename Joiner = std::integral_constant<cardinality, static_cast<cardinality>(0)>>
+            using join_cardinality =
+                std::integral_constant<cardinality,
+                    Outer::value == infinite || Inner::value == infinite || (Joiner::value == infinite && Outer::value != 0 && Outer::value != 1) ?
+                        infinite :
+                        Outer::value == unknown || Inner::value == unknown || (Joiner::value == unknown && Outer::value != 0 && Outer::value != 1) ?
+                            unknown :
+                            Outer::value == finite || Inner::value == finite || (Joiner::value == finite && Outer::value != 0 && Outer::value != 1) ?
+                                finite :
+                                static_cast<cardinality>(Outer::value * Inner::value + (Outer::value == 0 ? 0 : (Outer::value - 1) * Joiner::value))>;
+        }
+        /// \endcond
+
         /// \addtogroup group-views
         /// @{
 
         // Join a range of ranges
         template<typename Rng>
         struct join_view<Rng, void>
-          : range_adaptor<join_view<Rng, void>, Rng,
-                is_infinite<Rng>::value || is_infinite<range_value_t<Rng>>::value>
+          : view_adaptor<join_view<Rng, void>, Rng,
+                detail::join_cardinality<
+                    range_cardinality<Rng>,
+                    range_cardinality<range_value_t<Rng>>>::value>
         {
         private:
-            CONCEPT_ASSERT(Iterable<Rng>());
-            CONCEPT_ASSERT(Iterable<range_value_t<Rng>>());
+            CONCEPT_ASSERT(Range<Rng>());
+            CONCEPT_ASSERT(Range<range_value_t<Rng>>());
             using size_t_ = common_type_t<range_size_t<Rng>, range_size_t<range_value_t<Rng>>>;
 
             friend range_access;
@@ -64,7 +84,7 @@ namespace ranges
                     {
                         if(++it == end)
                         {
-#if __cplusplus == 201103L
+#ifndef RANGES_CXX_GREATER_THAN_11
                             rng_ = nullptr;
 #endif
                             it_ = detail::value_init{};
@@ -95,7 +115,7 @@ namespace ranges
                 bool equal(range_iterator_t<Rng> const &it, range_iterator_t<Rng> const &other_it,
                     adaptor const &other_adapt) const
                 {
-#if __cplusplus > 201103L
+#ifdef RANGES_CXX_GREATER_THAN_11
                     RANGES_ASSERT(rng_ == other_adapt.rng_);
                     return it == other_it && it_ == other_adapt.it_;
 #else
@@ -108,10 +128,17 @@ namespace ranges
                     ++it_;
                     satisfy(it);
                 }
-                auto current(range_iterator_t<Rng> const &) const -> decltype(*it_)
+                auto current(range_iterator_t<Rng> const &) const ->
+                    decltype(*it_)
                 {
                     return *it_;
                 }
+                auto indirect_move(range_iterator_t<Rng> const &) const ->
+                    decltype(ranges::indirect_move(it_))
+                {
+                    return ranges::indirect_move(it_);
+                }
+                void distance_to() = delete;
             };
             adaptor begin_adaptor()
             {
@@ -119,7 +146,7 @@ namespace ranges
             }
             adaptor end_adaptor()
             {
-#if __cplusplus > 201103L
+#ifdef RANGES_CXX_GREATER_THAN_11
                 return {*this};
 #else
                 return {};
@@ -128,27 +155,31 @@ namespace ranges
             // TODO: could support const iteration if range_reference_t<Rng> is a true reference.
         public:
             join_view() = default;
-            explicit join_view(Rng &&rng)
-              : range_adaptor_t<join_view>{std::forward<Rng>(rng)}, cur_{}
+            explicit join_view(Rng rng)
+              : view_adaptor_t<join_view>{std::move(rng)}, cur_{}
             {}
-            CONCEPT_REQUIRES(!is_infinite<Rng>() && ForwardIterable<Rng>() &&
-                             SizedIterable<range_value_t<Rng>>())
-            size_t_ size() const
+            CONCEPT_REQUIRES(range_cardinality<Rng>::value >= 0 && SizedRange<range_value_t<Rng>>())
+            constexpr size_t_ size() const
             {
-                return accumulate(view::transform(this->base(), ranges::size), size_t_{0});
+                return range_cardinality<join_view>::value >= 0 ?
+                    (size_t_)range_cardinality<join_view>::value :
+                    accumulate(view::transform(this->base(), ranges::size), size_t_{0});
             }
         };
 
         // Join a range of ranges, inserting a range of values between them.
         template<typename Rng, typename ValRng>
         struct join_view
-          : range_adaptor<join_view<Rng, ValRng>, Rng,
-                meta::or_<is_infinite<Rng>, is_infinite<range_value_t<Rng>>, is_infinite<ValRng>>::value>
+          : view_adaptor<join_view<Rng, ValRng>, Rng,
+                detail::join_cardinality<
+                    range_cardinality<Rng>,
+                    range_cardinality<range_value_t<Rng>>,
+                    range_cardinality<ValRng>>::value>
         {
         private:
-            CONCEPT_ASSERT(InputIterable<Rng>());
-            CONCEPT_ASSERT(ForwardIterable<ValRng>());
-            CONCEPT_ASSERT(InputIterable<range_value_t<Rng>>());
+            CONCEPT_ASSERT(InputRange<Rng>());
+            CONCEPT_ASSERT(ForwardRange<ValRng>());
+            CONCEPT_ASSERT(InputRange<range_value_t<Rng>>());
             CONCEPT_ASSERT(Common<range_value_t<range_value_t<Rng>>, range_value_t<ValRng>>());
             CONCEPT_ASSERT(SemiRegular<concepts::Common::value_t<
                 range_value_t<range_value_t<Rng>>,
@@ -157,7 +188,7 @@ namespace ranges
 
             friend range_access;
             view::all_t<range_value_t<Rng>> cur_;
-            view::all_t<ValRng> val_;
+            ValRng val_;
 
             struct adaptor : adaptor_base
             {
@@ -177,7 +208,7 @@ namespace ranges
                         {
                             if(++it == end)
                             {
-#if __cplusplus == 201103L
+#ifndef RANGES_CXX_GREATER_THAN_11
                                 rng_ = nullptr;
 #endif
                                 it_ = detail::value_init{};
@@ -215,7 +246,7 @@ namespace ranges
                 bool equal(range_iterator_t<Rng> const &it, range_iterator_t<Rng> const &other_it,
                     adaptor const &other_adapt) const
                 {
-#if __cplusplus > 201103L
+#ifdef RANGES_CXX_GREATER_THAN_11
                     RANGES_ASSERT(rng_ == other_adapt.rng_);
                     return it == other_it && toggl_ == other_adapt.toggl_ &&
                         (toggl_ ? it_ == other_adapt.it_ : val_it_ == other_adapt.val_it_);
@@ -230,12 +261,25 @@ namespace ranges
                     toggl_ ? (void)++it_ : (void)++val_it_;
                     satisfy(it);
                 }
-                // BUGBUG use common_reference to declare the return type?
                 auto current(range_iterator_t<Rng> const &) const ->
-                    decltype(true ? *it_ : *val_it_)
+                    common_reference_t<
+                        range_reference_t<range_value_t<Rng>>,
+                        range_reference_t<ValRng>>
                 {
-                    return toggl_ ? *it_ : *val_it_;
+                    if(toggl_)
+                        return *it_;
+                    return *val_it_;
                 }
+                auto indirect_move(range_iterator_t<Rng> const &) const ->
+                    common_reference_t<
+                        range_rvalue_reference_t<range_value_t<Rng>>,
+                        range_rvalue_reference_t<ValRng>>
+                {
+                    if(toggl_)
+                        return ranges::indirect_move(it_);
+                    return ranges::indirect_move(val_it_);
+                }
+                void distance_to() = delete;
             };
             adaptor begin_adaptor()
             {
@@ -243,7 +287,7 @@ namespace ranges
             }
             adaptor end_adaptor()
             {
-#if __cplusplus > 201103L
+#ifdef RANGES_CXX_GREATER_THAN_11
                 return {*this};
 #else
                 return {};
@@ -252,17 +296,20 @@ namespace ranges
             // TODO: could support const iteration if range_reference_t<Rng> is a true reference.
         public:
             join_view() = default;
-            join_view(Rng &&rng, ValRng && val)
-              : range_adaptor_t<join_view>{std::forward<Rng>(rng)}
-              , cur_{}, val_(view::all(std::forward<ValRng>(val)))
+            join_view(Rng rng, ValRng val)
+              : view_adaptor_t<join_view>{std::move(rng)}
+              , cur_{}, val_(std::move(val))
             {}
-            CONCEPT_REQUIRES(!is_infinite<Rng>() && ForwardIterable<Rng>() &&
-                             SizedIterable<range_value_t<Rng>>() && SizedIterable<ValRng>())
-            size_t_ size() const
+            CONCEPT_REQUIRES(range_cardinality<Rng>::value >= 0 &&
+                SizedRange<range_value_t<Rng>>() && SizedRange<ValRng>())
+            constexpr size_t_ size() const
             {
-                return accumulate(view::transform(this->mutable_base(), ranges::size), size_t_{0}) +
-                    (ranges::empty(this->mutable_base()) ? 0 :
-                        ranges::size(val_) * (ranges::size(this->mutable_base()) - 1));
+                return range_cardinality<join_view>::value >= 0 ?
+                    (size_t_)range_cardinality<join_view>::value :
+                    accumulate(view::transform(this->mutable_base(), ranges::size), size_t_{0}) +
+                        (range_cardinality<Rng>::value == 0 ?
+                            0 :
+                            ranges::size(val_) * (range_cardinality<Rng>::value - 1));;
             }
         };
 
@@ -271,34 +318,34 @@ namespace ranges
             struct join_fn
             {
                 template<typename Rng>
-                using JoinableIterable_ = meta::and_<
-                    InputIterable<Rng>,
+                using JoinableRange_ = meta::and_<
+                    InputRange<Rng>,
                     // Only evaluate this one if the previous one succeeded
-                    meta::lazy_apply<
+                    meta::lazy::apply<
                         meta::compose<
-                            meta::quote<InputIterable>,
+                            meta::quote<InputRange>,
                             meta::quote<range_value_t>>,
                         Rng>>;
 
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(JoinableIterable_<Rng>())>
-                join_view<Rng> operator()(Rng && rng) const
+                    CONCEPT_REQUIRES_(JoinableRange_<Rng>())>
+                join_view<all_t<Rng>> operator()(Rng && rng) const
                 {
-                    return join_view<Rng>{std::forward<Rng>(rng)};
+                    return join_view<all_t<Rng>>{all(std::forward<Rng>(rng))};
                 }
                 template<typename Rng, typename Val = range_value_t<range_value_t<Rng>>,
-                    CONCEPT_REQUIRES_(JoinableIterable_<Rng>())>
-                join_view<Rng, single_view<Val>> operator()(Rng && rng, meta::id_t<Val> v) const
+                    CONCEPT_REQUIRES_(JoinableRange_<Rng>())>
+                join_view<all_t<Rng>, single_view<Val>> operator()(Rng && rng, meta::id_t<Val> v) const
                 {
                     CONCEPT_ASSERT_MSG(SemiRegular<Val>(),
                         "To join a range of ranges with a value, the value type must be a model of "
                         "the SemiRegular concept; that is, it must have a default constructor, "
                         "copy and move constructors, and a destructor.");
-                    return {std::forward<Rng>(rng), single(std::move(v))};
+                    return {all(std::forward<Rng>(rng)), single(std::move(v))};
                 }
                 template<typename Rng, typename ValRng,
-                    CONCEPT_REQUIRES_(JoinableIterable_<Rng>() && ForwardIterable<ValRng>())>
-                join_view<Rng, ValRng> operator()(Rng && rng, ValRng && val) const
+                    CONCEPT_REQUIRES_(JoinableRange_<Rng>() && ForwardRange<ValRng>())>
+                join_view<all_t<Rng>, all_t<ValRng>> operator()(Rng && rng, ValRng && val) const
                 {
                     CONCEPT_ASSERT_MSG(Common<range_value_t<ValRng>,
                         range_value_t<range_value_t<Rng>>>(),
@@ -310,11 +357,11 @@ namespace ranges
                         "a common value type, and that value type must model the SemiRegular "
                         "concept; that is, it must have a default constructor, copy and move "
                         "constructors, and a destructor.");
-                    return {std::forward<Rng>(rng), std::forward<ValRng>(val)};
+                    return {all(std::forward<Rng>(rng)), all(std::forward<ValRng>(val))};
                 }
             private:
                friend view_access;
-               template<typename T, CONCEPT_REQUIRES_(!JoinableIterable_<T>())>
+               template<typename T, CONCEPT_REQUIRES_(!JoinableRange_<T>())>
                static auto bind(join_fn join, T && t)
                RANGES_DECLTYPE_AUTO_RETURN
                (

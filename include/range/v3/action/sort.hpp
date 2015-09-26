@@ -35,7 +35,7 @@ namespace ranges
             {
             private:
                 friend action_access;
-                template<typename C, typename P = ident, CONCEPT_REQUIRES_(!Iterable<C>())>
+                template<typename C, typename P = ident, CONCEPT_REQUIRES_(!Range<C>())>
                 static auto bind(sort_fn sort, C pred, P proj = P{})
                 RANGES_DECLTYPE_AUTO_RETURN
                 (
@@ -47,9 +47,9 @@ namespace ranges
                 {
                     template<typename Rng, typename C = ordered_less, typename P = ident,
                         typename I = range_iterator_t<Rng>>
-                    auto requires_(Rng rng, C pred = C{}, P proj = P{}) -> decltype(
+                    auto requires_(Rng&&, C&& = C{}, P&& = P{}) -> decltype(
                         concepts::valid_expr(
-                            concepts::model_of<concepts::ForwardIterable, Rng>(),
+                            concepts::model_of<concepts::ForwardRange, Rng>(),
                             concepts::is_true(Sortable<I, C, P>())
                         ));
                 };
@@ -70,14 +70,14 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, C, P>())>
                 void operator()(Rng &&, C && = C{}, P && = P{}) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
                         "The object on which action::sort operates must be a model of the "
-                        "ForwardIterable concept.");
+                        "ForwardRange concept.");
                     using I = range_iterator_t<Rng>;
-                    CONCEPT_ASSERT_MSG(Projectable<I, P>(),
+                    CONCEPT_ASSERT_MSG(IndirectCallable<P, I>(),
                         "The projection function must accept objects of the iterator's value type, "
-                        "reference type, and rvalue reference type.");
-                    CONCEPT_ASSERT_MSG(IndirectInvokableRelation<C, Project<I, P>>(),
+                        "reference type, and common reference type.");
+                    CONCEPT_ASSERT_MSG(IndirectCallableRelation<C, Projected<I, P>>(),
                         "The comparator passed to action::sort must accept objects returned "
                         "by the projection function, or of the range's value type if no projection "
                         "is specified.");

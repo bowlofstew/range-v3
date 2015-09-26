@@ -13,6 +13,7 @@
 #ifndef RANGES_V3_ALGORITHM_PARTIAL_SORT_COPY_HPP
 #define RANGES_V3_ALGORITHM_PARTIAL_SORT_COPY_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -21,7 +22,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/algorithm/heap_algorithm.hpp>
 #include <range/v3/utility/static_const.hpp>
 
@@ -36,7 +36,7 @@ namespace ranges
             InputIterator<I>,
             RandomAccessIterator<O>,
             IndirectlyCopyable<I, O>,
-            IndirectInvokableRelation<C, Project<I, PI>, Project<O, PO>>,
+            IndirectCallableRelation<C, Projected<I, PI>, Projected<O, PO>>,
             Sortable<O, C, PO>>;
 
         /// \addtogroup group-algorithms
@@ -50,9 +50,9 @@ namespace ranges
             O operator()(I begin, SI end, O out_begin, SO out_end, C pred_ = C{}, PI in_proj_ = PI{},
                 PO out_proj_ = PO{}) const
             {
-                auto && pred = invokable(pred_);
-                auto && in_proj = invokable(in_proj_);
-                auto && out_proj = invokable(out_proj_);
+                auto && pred = as_function(pred_);
+                auto && in_proj = as_function(in_proj_);
+                auto && out_proj = as_function(out_proj_);
                 O r = out_begin;
                 if(r != out_end)
                 {
@@ -62,9 +62,10 @@ namespace ranges
                     auto len = r - out_begin;
                     for(; begin != end; ++begin)
                     {
-                        if(pred(in_proj(*begin), out_proj(*out_begin)))
+                        auto &&x = *begin;
+                        if(pred(in_proj(x), out_proj(*out_begin)))
                         {
-                            *out_begin = *begin;
+                            *out_begin = (decltype(x) &&) x;
                             detail::sift_down_n(out_begin, len, out_begin, std::ref(pred), std::ref(out_proj));
                         }
                     }
@@ -78,8 +79,9 @@ namespace ranges
                 typename I = range_iterator_t<InRng>,
                 typename O = range_iterator_t<OutRng>,
                 CONCEPT_REQUIRES_(PartialSortCopyConcept<I, O, C, PI, PO>() &&
-                    Iterable<InRng>() && Iterable<OutRng &>())>
-            O operator()(InRng && in_rng, OutRng & out_rng, C pred = C{}, PI in_proj = PI{},
+                    Range<InRng>() && Range<OutRng>())>
+            range_safe_iterator_t<OutRng>
+            operator()(InRng && in_rng, OutRng &&out_rng, C pred = C{}, PI in_proj = PI{},
                 PO out_proj = PO{}) const
             {
                 return (*this)(begin(in_rng), end(in_rng), begin(out_rng), end(out_rng),

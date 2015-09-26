@@ -22,6 +22,7 @@
 #define RANGES_V3_ALGORITHM_HEAP_ALGORITHM_HPP
 
 #include <functional>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/distance.hpp>
 #include <range/v3/begin_end.hpp>
@@ -30,7 +31,6 @@
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 
@@ -42,7 +42,7 @@ namespace ranges
         template<typename I, typename C = ordered_less, typename P = ident>
         using IsHeapable = meta::fast_and<
             RandomAccessIterator<I>,
-            IndirectInvokableRelation<C, Project<I, P>>>;
+            IndirectCallableRelation<C, Projected<I, P>>>;
 
         /// \cond
         namespace detail
@@ -54,8 +54,8 @@ namespace ranges
                 I operator()(I const begin_, iterator_difference_t<I> const n_, C pred_ = C{}, P proj_ = P{}) const
                 {
                     RANGES_ASSERT(0 <= n_);
-                    auto &&pred = invokable(pred_);
-                    auto &&proj = invokable(proj_);
+                    auto &&pred = as_function(pred_);
+                    auto &&proj = as_function(proj_);
                     iterator_difference_t<I> p = 0, c = 1;
                     I pp = begin_;
                     while(c < n_)
@@ -111,10 +111,11 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(IsHeapable<I, C, P>() && Iterable<Rng &>())>
-            I operator()(Rng &rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(IsHeapable<I, C, P>() && Range<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
-                return detail::is_heap_until_n(begin(rng), distance(rng), std::move(pred), std::move(proj));
+                return detail::is_heap_until_n(begin(rng), distance(rng), std::move(pred),
+                    std::move(proj));
             }
         };
 
@@ -122,7 +123,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& is_heap_until = static_const<is_heap_until_fn>::value;
+            constexpr auto&& is_heap_until = static_const<with_braced_init_args<is_heap_until_fn>>::value;
         }
 
         struct is_heap_fn
@@ -137,7 +138,7 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(IsHeapable<I, C, P>() && Iterable<Rng>())>
+                CONCEPT_REQUIRES_(IsHeapable<I, C, P>() && Range<Rng>())>
             bool operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 return detail::is_heap_n(begin(rng), distance(rng), std::move(pred), std::move(proj));
@@ -162,8 +163,8 @@ namespace ranges
                 {
                     if(len > 1)
                     {
-                        auto &&pred = invokable(pred_);
-                        auto &&proj = invokable(proj_);
+                        auto &&pred = as_function(pred_);
+                        auto &&proj = as_function(proj_);
                         I end = begin + len;
                         len = (len - 2) / 2;
                         I i = begin + len;
@@ -205,8 +206,8 @@ namespace ranges
                     child = 2 * child + 1;
                     I child_i = begin + child;
 
-                    auto &&pred = invokable(pred_);
-                    auto &&proj = invokable(proj_);
+                    auto &&pred = as_function(pred_);
+                    auto &&proj = as_function(proj_);
 
                     if((child + 1) < len && pred(proj(*child_i), proj(*(child_i + 1))))
                     {
@@ -269,8 +270,8 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(RandomAccessIterable<Rng &>() && Sortable<I, C, P>())>
-            I operator()(Rng & rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(RandomAccessRange<Rng>() && Sortable<I, C, P>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 I begin = ranges::begin(rng);
                 auto n = distance(rng);
@@ -283,7 +284,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& push_heap = static_const<push_heap_fn>::value;
+            constexpr auto&& push_heap = static_const<with_braced_init_args<push_heap_fn>>::value;
         }
         /// @}
 
@@ -327,8 +328,8 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(RandomAccessIterable<Rng &>() && Sortable<I, C, P>())>
-            I operator()(Rng & rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(RandomAccessRange<Rng>() && Sortable<I, C, P>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 I begin = ranges::begin(rng);
                 auto n = distance(rng);
@@ -341,7 +342,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& pop_heap = static_const<pop_heap_fn>::value;
+            constexpr auto&& pop_heap = static_const<with_braced_init_args<pop_heap_fn>>::value;
         }
 
         struct make_heap_fn
@@ -350,8 +351,8 @@ namespace ranges
                 CONCEPT_REQUIRES_(RandomAccessIterator<I>() && IteratorRange<I, S>() && Sortable<I, C, P>())>
             I operator()(I begin, S end, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 iterator_difference_t<I> const n = distance(begin, end);
                 if(n > 1)
                     // start from the first parent, there is no need to consider children
@@ -362,11 +363,11 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(RandomAccessIterable<Rng &>() && Sortable<I, C, P>())>
-            I operator()(Rng & rng, C pred_ = C{}, P proj_ = P{}) const
+                CONCEPT_REQUIRES_(RandomAccessRange<Rng>() && Sortable<I, C, P>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 I begin = ranges::begin(rng);
                 iterator_difference_t<I> const n = distance(rng);
                 if(n > 1)
@@ -381,7 +382,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& make_heap = static_const<make_heap_fn>::value;
+            constexpr auto&& make_heap = static_const<with_braced_init_args<make_heap_fn>>::value;
         }
 
         struct sort_heap_fn
@@ -390,8 +391,8 @@ namespace ranges
                 CONCEPT_REQUIRES_(RandomAccessIterator<I>() && IteratorRange<I, S>() && Sortable<I, C, P>())>
             I operator()(I begin, S end, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 iterator_difference_t<I> const n = distance(begin, end);
                 for(auto i = n; i > 1; --i)
                     detail::pop_heap_n(begin, i, std::ref(pred), std::ref(proj));
@@ -400,11 +401,11 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(RandomAccessIterable<Rng &>() && Sortable<I, C, P>())>
-            I operator()(Rng & rng, C pred_ = C{}, P proj_ = P{}) const
+                CONCEPT_REQUIRES_(RandomAccessRange<Rng &>() && Sortable<I, C, P>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 I begin = ranges::begin(rng);
                 iterator_difference_t<I> const n = distance(rng);
                 for(auto i = n; i > 1; --i)
@@ -417,7 +418,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& sort_heap = static_const<sort_heap_fn>::value;
+            constexpr auto&& sort_heap = static_const<with_braced_init_args<sort_heap_fn>>::value;
         }
 
         /// @}

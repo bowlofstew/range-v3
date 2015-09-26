@@ -16,7 +16,7 @@
 
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_facade.hpp>
+#include <range/v3/view_facade.hpp>
 #include <range/v3/utility/static_const.hpp>
 
 namespace ranges
@@ -29,28 +29,27 @@ namespace ranges
         // Ordinarily, a view shouldn't contain its elements. This is so that copying
         // and assigning ranges is O(1), and also so that in the event of element
         // mutation, all the copies of the range see the mutation the same way. The
-        // repeat_view *does* own its lone element, though. This is OK because:
+        // repeat_n_view *does* own its lone element, though. This is OK because:
         //  - O(N) copying is fine when N==1 as it is in this case, and
         //  - The element is immutable, so there is no potential for incorrect
         //    semantics.
         template<typename Val>
         struct repeat_n_view
-          : range_facade<repeat_n_view<Val>>
+          : view_facade<repeat_n_view<Val>, finite>
         {
         private:
             friend range_access;
             Val value_;
-            std::size_t n_;
+            std::ptrdiff_t n_;
 
             struct cursor
             {
             private:
                 Val value_;
-                std::size_t n_;
+                std::ptrdiff_t n_;
             public:
-                using single_pass = std::true_type;
                 cursor() = default;
-                cursor(Val value, std::size_t n)
+                cursor(Val value, std::ptrdiff_t n)
                   : value_(std::move(value)), n_(n)
                 {}
                 Val current() const
@@ -61,10 +60,26 @@ namespace ranges
                 {
                     return 0 == n_;
                 }
+                bool equal(cursor const &that) const
+                {
+                    return n_ == that.n_;
+                }
                 void next()
                 {
                     RANGES_ASSERT(0 != n_);
                     --n_;
+                }
+                void prev()
+                {
+                    ++n_;
+                }
+                void advance(std::ptrdiff_t n)
+                {
+                    n_ -= n;
+                }
+                std::ptrdiff_t distance_to(cursor const &that) const
+                {
+                    return n_ - that.n_;
                 }
             };
             cursor begin_cursor() const
@@ -73,12 +88,12 @@ namespace ranges
             }
         public:
             repeat_n_view() = default;
-            constexpr repeat_n_view(Val value, std::size_t n)
-              : value_(detail::move(value)), n_(n)
+            constexpr repeat_n_view(Val value, std::ptrdiff_t n)
+              : value_(detail::move(value)), n_((RANGES_ASSERT(0 <= n), n))
             {}
             constexpr std::size_t size() const
             {
-                return n_;
+                return static_cast<std::size_t>(n_);
             }
         };
 
@@ -88,14 +103,14 @@ namespace ranges
             {
                 template<typename Val,
                     CONCEPT_REQUIRES_(SemiRegular<Val>())>
-                repeat_n_view<Val> operator()(Val value, std::size_t n) const
+                repeat_n_view<Val> operator()(Val value, std::ptrdiff_t n) const
                 {
                     return repeat_n_view<Val>{std::move(value), n};
                 }
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Val,
                     CONCEPT_REQUIRES_(!SemiRegular<Val>())>
-                void operator()(Val, std::size_t) const
+                void operator()(Val, std::ptrdiff_t) const
                 {
                     CONCEPT_ASSERT_MSG(SemiRegular<Val>(),
                         "The value passed to view::repeat_n must be SemiRegular; that is, it needs "

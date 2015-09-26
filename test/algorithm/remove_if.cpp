@@ -25,6 +25,7 @@
 #include <iostream>
 #include <memory>
 #include <utility>
+#include <functional>
 #include <range/v3/core.hpp>
 #include <range/v3/algorithm/remove_if.hpp>
 #include "../simple_test.hpp"
@@ -37,7 +38,8 @@ test_iter()
 {
     int ia[] = {0, 1, 2, 3, 4, 2, 3, 4, 2};
     constexpr unsigned sa = ranges::size(ia);
-    Iter r = ranges::remove_if(Iter(ia), Sent(ia+sa), std::bind2nd(std::equal_to<int>(), 2));
+    using namespace std::placeholders;
+    Iter r = ranges::remove_if(Iter(ia), Sent(ia+sa), std::bind(std::equal_to<int>(), _1, 2));
     CHECK(base(r) == ia + sa-3);
     CHECK(ia[0] == 0);
     CHECK(ia[1] == 1);
@@ -53,7 +55,8 @@ test_range()
 {
     int ia[] = {0, 1, 2, 3, 4, 2, 3, 4, 2};
     constexpr unsigned sa = ranges::size(ia);
-    Iter r = ranges::remove_if(::as_lvalue(ranges::make_range(Iter(ia), Sent(ia+sa))), std::bind2nd(std::equal_to<int>(), 2));
+    using namespace std::placeholders;
+    Iter r = ranges::remove_if(::as_lvalue(ranges::make_range(Iter(ia), Sent(ia+sa))), std::bind(std::equal_to<int>(), _1, 2));
     CHECK(base(r) == ia + sa-3);
     CHECK(ia[0] == 0);
     CHECK(ia[1] == 1);
@@ -157,17 +160,44 @@ int main()
     test_range_rvalue<bidirectional_iterator<std::unique_ptr<int>*>, sentinel<std::unique_ptr<int>*>>();
     test_range_rvalue<random_access_iterator<std::unique_ptr<int>*>, sentinel<std::unique_ptr<int>*>>();
 
-    // Check projection
-    S ia[] = {S{0}, S{1}, S{2}, S{3}, S{4}, S{2}, S{3}, S{4}, S{2}};
-    constexpr unsigned sa = ranges::size(ia);
-    S* r = ranges::remove_if(ia, std::bind2nd(std::equal_to<int>(), 2), &S::i);
-    CHECK(r == ia + sa-3);
-    CHECK(ia[0].i == 0);
-    CHECK(ia[1].i == 1);
-    CHECK(ia[2].i == 3);
-    CHECK(ia[3].i == 4);
-    CHECK(ia[4].i == 3);
-    CHECK(ia[5].i == 4);
+    {
+        // Check projection
+        S ia[] = {S{0}, S{1}, S{2}, S{3}, S{4}, S{2}, S{3}, S{4}, S{2}};
+        constexpr unsigned sa = ranges::size(ia);
+        using namespace std::placeholders;
+        S* r = ranges::remove_if(ia, std::bind(std::equal_to<int>(), _1, 2), &S::i);
+        CHECK(r == ia + sa-3);
+        CHECK(ia[0].i == 0);
+        CHECK(ia[1].i == 1);
+        CHECK(ia[2].i == 3);
+        CHECK(ia[3].i == 4);
+        CHECK(ia[4].i == 3);
+        CHECK(ia[5].i == 4);
+    }
+
+    {
+        // Check rvalue range
+        S ia[] = {S{0}, S{1}, S{2}, S{3}, S{4}, S{2}, S{3}, S{4}, S{2}};
+        constexpr unsigned sa = ranges::size(ia);
+        using namespace std::placeholders;
+        auto r = ranges::remove_if(ranges::view::all(ia), std::bind(std::equal_to<int>(), _1, 2), &S::i);
+        CHECK(r.get_unsafe() == ia + sa-3);
+        CHECK(ia[0].i == 0);
+        CHECK(ia[1].i == 1);
+        CHECK(ia[2].i == 3);
+        CHECK(ia[3].i == 4);
+        CHECK(ia[4].i == 3);
+        CHECK(ia[5].i == 4);
+
+        // Some tests for sanitizing an algorithm result
+        static_assert(std::is_same<decltype(r), ranges::dangling<S *>>::value, "");
+        auto r2 = ranges::sanitize(r);
+        static_assert(std::is_same<decltype(r2), ranges::dangling<>>::value, "");
+        auto r3 = ranges::sanitize(const_cast<decltype(r) const &>(r));
+        static_assert(std::is_same<decltype(r3), ranges::dangling<>>::value, "");
+        auto r4 = ranges::sanitize(std::move(r));
+        static_assert(std::is_same<decltype(r4), ranges::dangling<>>::value, "");
+    }
 
     return ::test_result();
 }

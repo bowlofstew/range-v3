@@ -19,8 +19,8 @@
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_interface.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/view_interface.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/common_iterator.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -36,21 +36,20 @@ namespace ranges
 
         template<typename Rng>
         struct bounded_view
-          : range_interface<bounded_view<Rng>, is_infinite<Rng>::value>
+          : view_interface<bounded_view<Rng>, range_cardinality<Rng>::value>
         {
         private:
             friend range_access;
-            using base_range_t = view::all_t<Rng>;
-            using base_iterator_t = range_iterator_t<base_range_t>;
-            using base_sentinel_t = range_sentinel_t<base_range_t>;
-            base_range_t rng_;
+            using base_iterator_t = range_iterator_t<Rng>;
+            using base_sentinel_t = range_sentinel_t<Rng>;
+            Rng rng_;
 
         public:
             using iterator = common_iterator<base_iterator_t, base_sentinel_t>;
 
             bounded_view() = default;
-            explicit bounded_view(Rng && rng)
-              : rng_(view::all(std::forward<Rng>(rng)))
+            explicit bounded_view(Rng rng)
+              : rng_(std::move(rng))
             {}
             iterator begin()
             {
@@ -60,26 +59,26 @@ namespace ranges
             {
                 return iterator{ranges::end(rng_)};
             }
-            CONCEPT_REQUIRES(Range<base_range_t const>())
+            CONCEPT_REQUIRES(View<Rng const>())
             iterator begin() const
             {
                 return iterator{ranges::begin(rng_)};
             }
-            CONCEPT_REQUIRES(Range<base_range_t const>())
+            CONCEPT_REQUIRES(View<Rng const>())
             iterator end() const
             {
                 return iterator{ranges::end(rng_)};
             }
-            CONCEPT_REQUIRES(SizedRange<base_range_t>())
-            range_size_t<base_range_t> size() const
+            CONCEPT_REQUIRES(SizedView<Rng>())
+            range_size_t<Rng> size() const
             {
                 return ranges::size(rng_);
             }
-            base_range_t & base()
+            Rng & base()
             {
                 return rng_;
             }
-            base_range_t const & base() const
+            Rng const & base() const
             {
                 return rng_;
             }
@@ -90,24 +89,24 @@ namespace ranges
             struct bounded_fn
             {
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && !BoundedIterable<Rng>())>
-                bounded_view<Rng> operator()(Rng && rng) const
+                    CONCEPT_REQUIRES_(Range<Rng>() && !BoundedRange<Rng>())>
+                bounded_view<all_t<Rng>> operator()(Rng && rng) const
                 {
-                    return bounded_view<Rng>{std::forward<Rng>(rng)};
+                    return bounded_view<all_t<Rng>>{all(std::forward<Rng>(rng))};
                 }
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && BoundedIterable<Rng>())>
-                ranges::view::all_t<Rng> operator()(Rng && rng) const
+                    CONCEPT_REQUIRES_(Range<Rng>() && BoundedRange<Rng>())>
+                all_t<Rng> operator()(Rng && rng) const
                 {
-                    return ranges::view::all(std::forward<Rng>(rng));
+                    return all(std::forward<Rng>(rng));
                 }
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!Iterable<Rng>())>
+                    CONCEPT_REQUIRES_(!Range<Rng>())>
                 void operator()(Rng && rng) const
                 {
-                    CONCEPT_ASSERT_MSG(Iterable<Rng>(),
-                        "Rng is not a model of the Iterable concept");
+                    CONCEPT_ASSERT_MSG(Range<Rng>(),
+                        "Rng is not a model of the Range concept");
                 }
             #endif
             };

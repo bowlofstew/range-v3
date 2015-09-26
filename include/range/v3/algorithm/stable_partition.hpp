@@ -24,6 +24,7 @@
 #include <memory>
 #include <functional>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -32,7 +33,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/swap.hpp>
 #include <range/v3/algorithm/move.hpp>
 #include <range/v3/algorithm/rotate.hpp>
@@ -48,7 +48,7 @@ namespace ranges
         using StablePartitionable = meta::fast_and<
             ForwardIterator<I>,
             Permutable<I>,
-            IndirectInvokablePredicate<C, Project<I, P>>>;
+            IndirectCallablePredicate<C, Projected<I, P>>>;
 
         /// \addtogroup group-algorithms
         /// @{
@@ -244,7 +244,7 @@ namespace ranges
                 }
                 // begin points to first false, everything prior to begin is already set.
                 // Either prove [begin, end) is all false and return begin, or point end to last true
-                I end = next_to(begin, end_);
+                I end = ranges::next(begin, end_);
                 do
                 {
                     if(begin == --end)
@@ -266,8 +266,8 @@ namespace ranges
                 CONCEPT_REQUIRES_(StablePartitionable<I, C, P>() && IteratorRange<I, S>())>
             I operator()(I begin, S end, C pred_, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 return stable_partition_fn::impl(std::move(begin), std::move(end), std::ref(pred),
                     std::ref(proj), iterator_concept<I>());
             }
@@ -275,8 +275,8 @@ namespace ranges
             // BUGBUG Can this be optimized if Rng has O1 size?
             template<typename Rng, typename C, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(StablePartitionable<I, C, P>() && Iterable<Rng &>())>
-            I operator()(Rng &rng, C pred, P proj = P{}) const
+                CONCEPT_REQUIRES_(StablePartitionable<I, C, P>() && Range<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -286,7 +286,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& stable_partition = static_const<stable_partition_fn>::value;
+            constexpr auto&& stable_partition = static_const<with_braced_init_args<stable_partition_fn>>::value;
         }
 
         /// @}

@@ -21,7 +21,6 @@
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/static_const.hpp>
 
 namespace ranges
@@ -34,11 +33,11 @@ namespace ranges
         {
             template<typename I, typename S, typename C = ordered_less, typename P = ident,
                 CONCEPT_REQUIRES_(ForwardIterator<I>() && IteratorRange<I, S>() &&
-                    IndirectInvokableRelation<C, Project<I, P>>())>
+                    IndirectCallableRelation<C, Projected<I, P>>())>
             I operator()(I begin, S end, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto && pred = invokable(pred_);
-                auto && proj = invokable(proj_);
+                auto && pred = as_function(pred_);
+                auto && proj = as_function(proj_);
                 if(begin != end)
                     for(auto tmp = next(begin); tmp != end; ++tmp)
                         if(pred(proj(*begin), proj(*tmp)))
@@ -48,9 +47,9 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(ForwardIterable<Rng &>() &&
-                    IndirectInvokableRelation<C, Project<I, P>>())>
-            I operator()(Rng &rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(ForwardRange<Rng>() &&
+                    IndirectCallableRelation<C, Projected<I, P>>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -60,7 +59,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& max_element = static_const<max_element_fn>::value;
+            constexpr auto&& max_element = static_const<with_braced_init_args<max_element_fn>>::value;
         }
 
         /// @}

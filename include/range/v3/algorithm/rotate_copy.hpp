@@ -23,6 +23,8 @@
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/utility/static_const.hpp>
+#include <range/v3/utility/tagged_pair.hpp>
+#include <range/v3/algorithm/tagspec.hpp>
 
 namespace ranges
 {
@@ -34,21 +36,24 @@ namespace ranges
         {
             template<typename I, typename S, typename O, typename P = ident,
                 CONCEPT_REQUIRES_(ForwardIterator<I>() && IteratorRange<I, S>() && WeaklyIncrementable<O>() &&
-                    IndirectlyCopyable<I, O, P>())>
-            std::pair<I, O> operator()(I begin, I middle, S end, O out, P proj_ = P{}) const
+                    IndirectlyCopyable<I, O>())>
+            tagged_pair<tag::in(I), tag::out(O)> operator()(I begin, I middle, S end, O out) const
             {
-                auto &&proj = invokable(proj_);
-                auto res = copy(middle, std::move(end), std::move(out), std::ref(proj));
-                return {std::move(res.first), copy(std::move(begin), middle, std::move(res.second), std::ref(proj)).second};
+                auto res = copy(middle, std::move(end), std::move(out));
+                return {
+                    std::move(res.first),
+                    copy(std::move(begin), middle, std::move(res.second)).second
+                };
             }
 
             template<typename Rng, typename O, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Iterable<Rng &>() && WeaklyIncrementable<O>() &&
-                    IndirectlyCopyable<I, O, P>())>
-            std::pair<I, O> operator()(Rng & rng, I middle, O out, P proj = P{}) const
+                CONCEPT_REQUIRES_(Range<Rng>() && WeaklyIncrementable<O>() &&
+                    IndirectlyCopyable<I, O>())>
+            tagged_pair<tag::in(range_safe_iterator_t<Rng>), tag::out(O)>
+            operator()(Rng &&rng, I middle, O out) const
             {
-                return (*this)(begin(rng), std::move(middle), end(rng), std::move(out), std::move(proj));
+                return (*this)(begin(rng), std::move(middle), end(rng), std::move(out));
             }
         };
 
@@ -56,7 +61,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& rotate_copy = static_const<rotate_copy_fn>::value;
+            constexpr auto&& rotate_copy = static_const<with_braced_init_args<rotate_copy_fn>>::value;
         }
 
         /// @}

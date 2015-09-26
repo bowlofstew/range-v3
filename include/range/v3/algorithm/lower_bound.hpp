@@ -41,8 +41,8 @@ namespace ranges
 
             template<typename Rng, typename V, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Iterable<Rng &>() && BinarySearchable<I, V, C, P>())>
-            I operator()(Rng &rng, V const &val, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(Range<Rng>() && BinarySearchable<I, V, C, P>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, V const &val, C pred = C{}, P proj = P{}) const
             {
                 static_assert(!is_infinite<Rng>::value, "Trying to binary search an infinite range");
                 return aux::lower_bound_n(begin(rng), distance(rng), val, std::move(pred),
@@ -54,7 +54,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& lower_bound = static_const<lower_bound_fn>::value;
+            constexpr auto&& lower_bound = static_const<with_braced_init_args<lower_bound_fn>>::value;
         }
 
         /// @}

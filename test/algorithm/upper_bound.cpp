@@ -13,10 +13,28 @@
 //  Distributed under the MIT License(see accompanying file LICENSE_1_0_0.txt
 //  or a copy at http://stlab.adobe.com/licenses.html)
 
+#include <vector>
 #include <utility>
 #include <range/v3/core.hpp>
 #include <range/v3/algorithm/upper_bound.hpp>
 #include "../simple_test.hpp"
+
+struct my_int
+{
+    int value;
+};
+
+bool compare(my_int lhs, my_int rhs)
+{
+    return lhs.value < rhs.value;
+}
+
+void not_totally_ordered()
+{
+    // This better compile!
+    std::vector<my_int> vec;
+    ranges::upper_bound(vec, my_int{10}, compare);
+}
 
 int main()
 {
@@ -44,6 +62,15 @@ int main()
 
     CHECK(ranges::upper_bound(a, 1, less(), &std::pair<int, int>::first) == &a[4]);
     CHECK(ranges::upper_bound(c, 1, less(), &std::pair<int, int>::first) == &c[4]);
+
+    CHECK(ranges::upper_bound(ranges::view::all(a), a[2]).get_unsafe() == &a[3]);
+    CHECK(ranges::upper_bound(ranges::view::all(c), c[3]).get_unsafe() == &c[4]);
+
+    CHECK(ranges::upper_bound(ranges::view::all(a), a[4], less()).get_unsafe() == &a[5]);
+    CHECK(ranges::upper_bound(ranges::view::all(c), c[5], less()).get_unsafe() == &c[6]);
+
+    CHECK(ranges::upper_bound(ranges::view::all(a), 1, less(), &std::pair<int, int>::first).get_unsafe() == &a[4]);
+    CHECK(ranges::upper_bound(ranges::view::all(c), 1, less(), &std::pair<int, int>::first).get_unsafe() == &c[4]);
 
     return test_result();
 }

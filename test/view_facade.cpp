@@ -15,7 +15,7 @@
 #include "./test_utils.hpp"
 
 struct MyRange
-  : ranges::range_facade<MyRange>
+  : ranges::view_facade<MyRange>
 {
 private:
     friend struct ranges::range_access;
@@ -72,9 +72,9 @@ int main()
 {
     using namespace ranges;
     auto r = MyRange{};
-    ::models<concepts::BoundedRange>(r);
-    ::models<concepts::SizedRange>(r);
-    ::models<concepts::RandomAccessRange>(r);
+    ::models<concepts::BoundedView>(r);
+    ::models<concepts::SizedView>(r);
+    ::models<concepts::RandomAccessView>(r);
     ::check_equal(r, {1, 2, 3, 4, 5, 6, 7});
 
     CHECK(7u == r.size());

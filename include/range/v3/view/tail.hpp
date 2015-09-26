@@ -22,7 +22,7 @@
 #include <range/v3/size.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_interface.hpp>
+#include <range/v3/view_interface.hpp>
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/all.hpp>
@@ -36,40 +36,55 @@ namespace ranges
         /// @{
         template<typename Rng>
         struct tail_view
-          : range_interface<tail_view<Rng>, is_infinite<Rng>::value>
+          : view_interface<
+                tail_view<Rng>,
+                (range_cardinality<Rng>::value > 0) ?
+                    (cardinality)(range_cardinality<Rng>::value - 1) :
+                    range_cardinality<Rng>::value>
         {
         private:
-            using base_range_t = view::all_t<Rng>;
-            base_range_t rng_;
+            Rng rng_;
         public:
-            using iterator = range_iterator_t<base_range_t>;
-            using sentinel = range_sentinel_t<base_range_t>;
+            using iterator = range_iterator_t<Rng>;
+            using sentinel = range_sentinel_t<Rng>;
 
             tail_view() = default;
-            tail_view(Rng &&rng)
-              : rng_(view::all(std::forward<Rng>(rng)))
+            tail_view(Rng rng)
+              : rng_(std::forward<Rng>(rng))
             {
-                CONCEPT_ASSERT(InputIterable<Rng>());
-                RANGES_ASSERT(!ForwardIterable<Rng>() || !empty(rng_));
+                CONCEPT_ASSERT(InputRange<Rng>());
+                RANGES_ASSERT(!ForwardRange<Rng>() || !empty(rng_));
             }
+            iterator begin()
+            {
+                return next(ranges::begin(rng_));
+            }
+            CONCEPT_REQUIRES(Range<Rng const>())
             iterator begin() const
             {
                 return next(ranges::begin(rng_));
             }
+            sentinel end()
+            {
+                return ranges::end(rng_);
+            }
+            CONCEPT_REQUIRES(Range<Rng const>())
             sentinel end() const
             {
                 return ranges::end(rng_);
             }
-            CONCEPT_REQUIRES(SizedRange<base_range_t>())
-            range_size_t<base_range_t> size() const
+            CONCEPT_REQUIRES(SizedView<Rng>())
+            constexpr range_size_t<Rng> size() const
             {
-                return ranges::size(rng_) - 1;
+                return range_cardinality<Rng>::value > 0 ?
+                    (range_size_t<Rng>)range_cardinality<Rng>::value - 1 :
+                    ranges::size(rng_) - 1;
             }
-            base_range_t & base()
+            Rng & base()
             {
                 return rng_;
             }
-            base_range_t const & base() const
+            Rng const & base() const
             {
                 return rng_;
             }
@@ -79,19 +94,21 @@ namespace ranges
         {
             struct tail_fn
             {
-                template<typename Rng, CONCEPT_REQUIRES_(InputIterable<Rng>())>
-                tail_view<Rng> operator()(Rng && rng) const
+                template<typename Rng, CONCEPT_REQUIRES_(InputRange<Rng>())>
+                tail_view<all_t<Rng>> operator()(Rng && rng) const
                 {
-                    return tail_view<Rng>{std::forward<Rng>(rng)};
+                    static_assert(range_cardinality<Rng>::value != 0,
+                        "Can't take the tail of an empty range.");
+                    return tail_view<all_t<Rng>>{all(std::forward<Rng>(rng))};
                 }
 
             #ifndef RANGES_DOXYGEN_INVOKED
-                template<typename Rng, CONCEPT_REQUIRES_(!InputIterable<Rng>())>
+                template<typename Rng, CONCEPT_REQUIRES_(!InputRange<Rng>())>
                 void operator()(Rng &&) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
                         "The object on which view::tail is to operate must be a model of the "
-                        "InputIterable concept.");
+                        "InputRange concept.");
                 }
             #endif
             };

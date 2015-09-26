@@ -21,7 +21,6 @@
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range.hpp>
 #include <range/v3/utility/iterator.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/algorithm/aux_/lower_bound_n.hpp>
 #include <range/v3/algorithm/aux_/upper_bound_n.hpp>
@@ -42,8 +41,8 @@ namespace ranges
                     P proj_ = P{}) const
                 {
                     RANGES_ASSERT(0 <= dist);
-                    auto &&pred = invokable(pred_);
-                    auto &&proj = invokable(proj_);
+                    auto &&pred = as_function(pred_);
+                    auto &&proj = as_function(proj_);
                     while(0 != dist)
                     {
                         auto half = dist / 2;

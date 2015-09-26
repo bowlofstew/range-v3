@@ -21,9 +21,26 @@
 # define RANGES_ASSERT assert
 #endif
 
-#define RANGES_DECLTYPE_AUTO_RETURN(...)    \
-    -> decltype(__VA_ARGS__)                \
-    { return (__VA_ARGS__); }               \
+#ifndef RANGES_ENSURE_MSG
+# include <exception>
+# define RANGES_ENSURE_MSG(COND, MSG) \
+    ((COND) ? void() : (RANGES_ASSERT(!(true && MSG)), std::terminate()))
+#endif
+
+#ifndef RANGES_ENSURE
+# define RANGES_ENSURE(COND) \
+    RANGES_ENSURE_MSG(COND, #COND)
+#endif
+
+#define RANGES_DECLTYPE_AUTO_RETURN(...)                        \
+    -> decltype(__VA_ARGS__)                                    \
+    { return (__VA_ARGS__); }                                   \
+    /**/
+
+#define RANGES_DECLTYPE_AUTO_RETURN_NOEXCEPT(...)               \
+    noexcept(noexcept(decltype(__VA_ARGS__)(__VA_ARGS__))) ->   \
+    decltype(__VA_ARGS__)                                       \
+    { return (__VA_ARGS__); }                                   \
     /**/
 
 // Non-portable forward declarations of standard containers
@@ -51,6 +68,15 @@
 #endif
 
 #if __cplusplus > 201103
+#define RANGES_CXX_GREATER_THAN_11
+#endif
+
+#if __cplusplus > 201402
+#define RANGES_CXX_GREATER_THAN_14
+#endif
+
+#ifndef RANGES_DISABLE_DEPRECATED_WARNINGS
+#ifdef RANGES_CXX_GREATER_THAN_11
 #define RANGES_DEPRECATED(MSG) [[deprecated(MSG)]]
 #else
 #if defined(__clang__) || defined(__GNUC__)
@@ -60,6 +86,18 @@
 #else
 #define RANGES_DEPRECATED(MSG)
 #endif
+#endif
+#else
+#define RANGES_DEPRECATED(MSG)
+#endif
+
+// RANGES_CXX14_CONSTEXPR macro (see also BOOST_CXX14_CONSTEXPR)
+// Note: constexpr implies inline, to retain the same visibility
+// C++14 constexpr functions are inline in C++11
+#ifdef RANGES_CXX_GREATER_THAN_11
+#define RANGES_CXX14_CONSTEXPR constexpr
+#else
+#define RANGES_CXX14_CONSTEXPR inline
 #endif
 
 #endif

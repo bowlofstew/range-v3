@@ -21,6 +21,7 @@
 #ifndef RANGES_V3_ALGORITHM_PERMUTATION_HPP
 #define RANGES_V3_ALGORITHM_PERMUTATION_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -29,7 +30,6 @@
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/swap.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/algorithm/reverse.hpp>
@@ -57,9 +57,9 @@ namespace ranges
             static bool four_iter_impl(I1 begin1, S1 end1, I2 begin2, S2 end2, C pred_, P1 proj1_,
                 P2 proj2_)
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj1 = invokable(proj1_);
-                auto &&proj2 = invokable(proj2_);
+                auto &&pred = as_function(pred_);
+                auto &&proj1 = as_function(proj1_);
+                auto &&proj2 = as_function(proj2_);
                 // shorten sequences as much as possible by lopping of any equal parts
                 for(; begin1 != end1 && begin2 != end2; ++begin1, ++begin2)
                     if(!pred(proj1(*begin1), proj2(*begin2)))
@@ -108,9 +108,9 @@ namespace ranges
             bool operator()(I1 begin1, S1 end1, I2 begin2, C pred_ = C{}, P1 proj1_ = P1{},
                 P2 proj2_ = P2{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj1 = invokable(proj1_);
-                auto &&proj2 = invokable(proj2_);
+                auto &&pred = as_function(pred_);
+                auto &&proj1 = as_function(proj1_);
+                auto &&proj2 = as_function(proj2_);
                 // shorten sequences as much as possible by lopping of any equal parts
                 for(; begin1 != end1; ++begin1, ++begin2)
                     if(!pred(proj1(*begin1), proj2(*begin2)))
@@ -170,7 +170,8 @@ namespace ranges
             template<typename Rng1, typename I2Ref, typename C = equal_to, typename P1 = ident,
                 typename P2 = ident, typename I1 = range_iterator_t<Rng1>,
                 typename I2 = uncvref_t<I2Ref>,
-                CONCEPT_REQUIRES_(ForwardIterable<Rng1>() && IsPermutationable<I1, I2, C, P1, P2>())>
+                CONCEPT_REQUIRES_(ForwardRange<Rng1>() && Iterator<I2>() &&
+                    IsPermutationable<I1, I2, C, P1, P2>())>
             bool operator()(Rng1 &&rng1, I2Ref &&begin2,
                 C pred = C{}, P1 proj1 = P1{}, P2 proj2 = P2{}) const
             {
@@ -181,12 +182,12 @@ namespace ranges
             template<typename Rng1, typename Rng2, typename C = equal_to, typename P1 = ident,
                 typename P2 = ident, typename I1 = range_iterator_t<Rng1>,
                 typename I2 = range_iterator_t<Rng2>,
-                CONCEPT_REQUIRES_(ForwardIterable<Rng1>() && ForwardIterable<Rng2>() &&
+                CONCEPT_REQUIRES_(ForwardRange<Rng1>() && ForwardRange<Rng2>() &&
                     IsPermutationable<I1, I2, C, P1, P2>())>
             bool operator()(Rng1 &&rng1, Rng2 &&rng2,
                 C pred = C{}, P1 proj1 = P1{}, P2 proj2 = P2{}) const
             {
-                if(SizedIterable<Rng1>() && SizedIterable<Rng2>())
+                if(SizedRange<Rng1>() && SizedRange<Rng2>())
                     return distance(rng1) == distance(rng2) &&
                         (*this)(begin(rng1), end(rng1), begin(rng2), std::move(pred),
                             std::move(proj1), std::move(proj2));
@@ -208,11 +209,11 @@ namespace ranges
                 CONCEPT_REQUIRES_(BidirectionalIterator<I>() && IteratorRange<I, S>() && Sortable<I, C, P>())>
             bool operator()(I begin, S end_, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 if(begin == end_)
                     return false;
-                I end = next_to(begin, end_), i = end;
+                I end = ranges::next(begin, end_), i = end;
                 if(begin == --i)
                     return false;
                 while(true)
@@ -237,8 +238,8 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(BidirectionalIterable<Rng &>() && Sortable<I, C, P>())>
-            bool operator()(Rng &rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(BidirectionalRange<Rng>() && Sortable<I, C, P>())>
+            bool operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -248,7 +249,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& next_permutation = static_const<next_permutation_fn>::value;
+            constexpr auto&& next_permutation = static_const<with_braced_init_args<next_permutation_fn>>::value;
         }
 
         struct prev_permutation_fn
@@ -257,11 +258,11 @@ namespace ranges
                 CONCEPT_REQUIRES_(BidirectionalIterator<I>() && IteratorRange<I, S>() && Sortable<I, C, P>())>
             bool operator()(I begin, S end_, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 if(begin == end_)
                     return false;
-                I end = next_to(begin, end_), i = end;
+                I end = ranges::next(begin, end_), i = end;
                 if(begin == --i)
                     return false;
                 while(true)
@@ -286,8 +287,8 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(BidirectionalIterable<Rng &>() && Sortable<I, C, P>())>
-            bool operator()(Rng &rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(BidirectionalRange<Rng>() && Sortable<I, C, P>())>
+            bool operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -297,7 +298,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& prev_permutation = static_const<prev_permutation_fn>::value;
+            constexpr auto&& prev_permutation = static_const<with_braced_init_args<prev_permutation_fn>>::value;
         }
 
         /// @}

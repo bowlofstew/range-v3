@@ -16,6 +16,7 @@
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/empty.hpp>
 #include <range/v3/begin_end.hpp>
@@ -23,9 +24,9 @@
 #include <range/v3/size.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_adaptor.hpp>
+#include <range/v3/view_adaptor.hpp>
 #include <range/v3/utility/iterator.hpp>
-#include <range/v3/utility/invokable.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/view.hpp>
 
@@ -37,7 +38,12 @@ namespace ranges
         /// @{
         template<typename Rng>
         struct intersperse_view
-          : range_adaptor<intersperse_view<Rng>, Rng>
+          : view_adaptor<
+                intersperse_view<Rng>,
+                Rng,
+                (range_cardinality<Rng>::value > 0) ?
+                    static_cast<cardinality>(range_cardinality<Rng>::value * 2 - 1) :
+                    range_cardinality<Rng>::value>
         {
         private:
             friend range_access;
@@ -69,16 +75,16 @@ namespace ranges
                         ++it;
                     toggl_ = !toggl_;
                 }
-                CONCEPT_REQUIRES(BidirectionalIterable<Rng>())
+                CONCEPT_REQUIRES(BidirectionalRange<Rng>())
                 void prev(range_iterator_t<Rng> & it)
                 {
                     toggl_ = !toggl_;
                     if(toggl_)
                         --it;
                 }
-                CONCEPT_REQUIRES(RandomAccessIterable<Rng>())
-                range_difference_t<Rng> distance_to(range_iterator_t<Rng> it, range_iterator_t<Rng> other_it,
-                    cursor_adaptor const &other) const
+                CONCEPT_REQUIRES(RandomAccessRange<Rng>())
+                range_difference_t<Rng> distance_to(range_iterator_t<Rng> it,
+                    range_iterator_t<Rng> other_it, cursor_adaptor const &other) const
                 {
                     auto d = other_it - it;
                     if(d > 0)
@@ -87,7 +93,7 @@ namespace ranges
                         return d * 2 + (toggl_ != other.toggl_);
                     return other.toggl_ - toggl_;
                 }
-                CONCEPT_REQUIRES(RandomAccessIterable<Rng>())
+                CONCEPT_REQUIRES(RandomAccessRange<Rng>())
                 void advance(range_iterator_t<Rng> &it, range_difference_t<Rng> n)
                 {
                     ranges::advance(it, n >= 0 ? (n + toggl_) / 2 : (n - !toggl_) / 2);
@@ -107,22 +113,22 @@ namespace ranges
             {
                 return {val_, ranges::empty(this->mutable_base())};
             }
-            CONCEPT_REQUIRES(BoundedIterable<Rng>() && !SinglePass<range_iterator_t<Rng>>())
+            CONCEPT_REQUIRES(BoundedRange<Rng>() && !SinglePass<range_iterator_t<Rng>>())
             cursor_adaptor end_adaptor() const
             {
                 return {val_, true};
             }
-            CONCEPT_REQUIRES(!BoundedIterable<Rng>() || SinglePass<range_iterator_t<Rng>>())
+            CONCEPT_REQUIRES(!BoundedRange<Rng>() || SinglePass<range_iterator_t<Rng>>())
             sentinel_adaptor end_adaptor() const
             {
                 return {};
             }
         public:
             intersperse_view() = default;
-            intersperse_view(Rng && rng, range_value_t<Rng> val)
-              : range_adaptor_t<intersperse_view>{std::forward<Rng>(rng)}, val_(std::move(val))
+            intersperse_view(Rng rng, range_value_t<Rng> val)
+              : view_adaptor_t<intersperse_view>{std::move(rng)}, val_(std::move(val))
             {}
-            CONCEPT_REQUIRES(SizedIterable<Rng>())
+            CONCEPT_REQUIRES(SizedRange<Rng>())
             range_size_t<Rng> size() const
             {
                 auto tmp = ranges::size(this->mutable_base());
@@ -145,16 +151,16 @@ namespace ranges
             public:
                 template<typename Rng, typename T = range_value_t<Rng>>
                 using Concept = meta::and_<
-                    InputIterable<Rng>,
-                    Convertible<T, range_value_t<Rng>>,
-                    Convertible<range_reference_t<Rng>, range_value_t<Rng>>,
+                    InputRange<Rng>,
+                    ConvertibleTo<T, range_value_t<Rng>>,
+                    ConvertibleTo<range_reference_t<Rng>, range_value_t<Rng>>,
                     SemiRegular<range_value_t<Rng>>>;
 
                 template<typename Rng,
                     CONCEPT_REQUIRES_(Concept<Rng>())>
-                intersperse_view<Rng> operator()(Rng && rng, range_value_t<Rng> val) const
+                intersperse_view<all_t<Rng>> operator()(Rng && rng, range_value_t<Rng> val) const
                 {
-                    return {std::forward<Rng>(rng), {std::move(val)}};
+                    return {all(std::forward<Rng>(rng)), {std::move(val)}};
                 }
 
             #ifndef RANGES_DOXYGEN_INVOKED
@@ -162,13 +168,13 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, T>())>
                 void operator()(Rng &&, T &&) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
                         "The object on which view::intersperse operates must be a model of the "
-                        "InputIterable concept.");
-                    CONCEPT_ASSERT_MSG(Convertible<T, range_value_t<Rng>>(),
+                        "InputRange concept.");
+                    CONCEPT_ASSERT_MSG(ConvertibleTo<T, range_value_t<Rng>>(),
                         "The value to intersperse in the range must be convertible to the range's "
                         "value type.");
-                    CONCEPT_ASSERT_MSG(Convertible<range_reference_t<Rng>, range_value_t<Rng>>(),
+                    CONCEPT_ASSERT_MSG(ConvertibleTo<range_reference_t<Rng>, range_value_t<Rng>>(),
                         "The range's reference type must be convertible to the range's "
                         "value type.");
                     CONCEPT_ASSERT_MSG(SemiRegular<range_value_t<Rng>>(),

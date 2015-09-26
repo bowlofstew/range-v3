@@ -12,6 +12,7 @@
 #include <vector>
 #include <range/v3/core.hpp>
 #include <range/v3/view/iota.hpp>
+#include <range/v3/view/generate.hpp>
 #include <range/v3/view/take_while.hpp>
 #include "../simple_test.hpp"
 #include "../test_utils.hpp"
@@ -21,10 +22,10 @@ int main()
     using namespace ranges;
     auto rng0 = view::iota(10) | view::take_while([](int i) { return i != 25; });
     ::check_equal(rng0, {10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24});
-    ::models<concepts::Range>(rng0);
-    ::models_not<concepts::BoundedRange>(rng0);
+    ::models<concepts::View>(rng0);
+    ::models_not<concepts::BoundedView>(rng0);
     ::models<concepts::RandomAccessIterator>(rng0.begin());
-    CONCEPT_ASSERT(RandomAccessRange<take_while_view<std::vector<int> &, std::function<bool(int)>>>());
+    CONCEPT_ASSERT(RandomAccessView<take_while_view<std::vector<int> &, std::function<bool(int)>>>());
 
     std::vector<int> vi{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
     auto rng1 = vi | view::take_while([](int i) { return i != 50; });
@@ -35,8 +36,27 @@ int main()
     int cnt = 0;
     auto mutable_only = view::take_while(rgi, [cnt](int) mutable { return ++cnt <= 5;});
     ::check_equal(mutable_only, {0,1,2,3,4});
-    CONCEPT_ASSERT(Range<decltype(mutable_only)>());
-    CONCEPT_ASSERT(!Range<decltype(mutable_only) const>());
+    CONCEPT_ASSERT(View<decltype(mutable_only)>());
+    CONCEPT_ASSERT(!View<decltype(mutable_only) const>());
+
+    {
+        auto ns = view::generate([]() mutable {
+            static std::size_t N = 0;
+            return ++N;
+        });
+        auto rng = ns | view::take_while([](int i) { return i < 5; });
+        ::check_equal(rng, {1u,2u,3u,4u});
+    }
+
+    {
+        auto ns = view::generate([]() mutable {
+            static std::size_t N = 0;
+            return ++N;
+        });
+        auto rng = ns | view::take_while([](int i) mutable { return i < 5; });
+        ::check_equal(rng, {1u,2u,3u,4u});
+    }
+
 
     return test_result();
 }

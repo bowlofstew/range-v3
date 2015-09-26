@@ -13,6 +13,7 @@
 #ifndef RANGES_V3_ALGORITHM_REMOVE_IF_HPP
 #define RANGES_V3_ALGORITHM_REMOVE_IF_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -21,7 +22,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/algorithm/find_if.hpp>
 #include <range/v3/utility/static_const.hpp>
 
@@ -33,7 +33,7 @@ namespace ranges
         template<typename I, typename C, typename P = ident>
         using RemovableIf = meta::fast_and<
             ForwardIterator<I>,
-            IndirectInvokablePredicate<C, Project<I, P>>,
+            IndirectCallablePredicate<C, Projected<I, P>>,
             Permutable<I>>;
 
         /// \addtogroup group-algorithms
@@ -44,8 +44,8 @@ namespace ranges
                 CONCEPT_REQUIRES_(RemovableIf<I, C, P>() && IteratorRange<I, S>())>
             I operator()(I begin, S end, C pred_, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 begin = find_if(std::move(begin), end, std::ref(pred), std::ref(proj));
                 if(begin != end)
                 {
@@ -63,8 +63,8 @@ namespace ranges
 
             template<typename Rng, typename C, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(RemovableIf<I, C, P>() && ForwardIterable<Rng &>())>
-            I operator()(Rng &rng, C pred, P proj = P{}) const
+                CONCEPT_REQUIRES_(RemovableIf<I, C, P>() && ForwardRange<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -74,7 +74,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& remove_if = static_const<remove_if_fn>::value;
+            constexpr auto&& remove_if = static_const<with_braced_init_args<remove_if_fn>>::value;
         }
 
         /// @}

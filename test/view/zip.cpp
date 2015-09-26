@@ -13,13 +13,17 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <memory>
 #include <range/v3/core.hpp>
 #include <range/v3/view/zip.hpp>
+#include <range/v3/view/zip_with.hpp>
 #include <range/v3/view/map.hpp>
+#include <range/v3/view/move.hpp>
+#include <range/v3/view/stride.hpp>
 #include <range/v3/view/bounded.hpp>
+#include <range/v3/view/transform.hpp>
 #include <range/v3/algorithm/copy.hpp>
 #include <range/v3/algorithm/move.hpp>
-#include <range/v3/algorithm/sort.hpp>
 #include <range/v3/utility/iterator.hpp>
 #include "../simple_test.hpp"
 #include "../test_utils.hpp"
@@ -65,14 +69,14 @@ int main()
     std::vector<int> vi{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     std::vector<std::string> const vs{"hello", "goodbye", "hello", "goodbye"};
 
-    // All ranges
+    // All bounded ranges, but one single-pass
     {
         std::stringstream str{"john paul george ringo"};
         using V = std::tuple<int, std::string, std::string>;
         auto && rng = view::zip(vi, vs, istream<std::string>(str) | view::bounded);
-        using Rng = decltype(rng);
-        ::models<concepts::BoundedRange>(rng);
-        ::models_not<concepts::SizedRange>(rng);
+        using Rng = decltype((rng));
+        ::models_not<concepts::BoundedView>(rng);
+        ::models_not<concepts::SizedView>(rng);
         CONCEPT_ASSERT(Same<
             range_value_t<Rng>,
             std::tuple<int, std::string, std::string>>());
@@ -81,14 +85,12 @@ int main()
             common_tuple<int &, std::string const &, std::string const &>>());
         CONCEPT_ASSERT(Same<
             range_rvalue_reference_t<Rng>,
-            std::tuple<int &&, std::string const &&, std::string const &&>>());
-        CONCEPT_ASSERT(Convertible<range_value_t<Rng> &&,
+            common_tuple<int &&, std::string const &&, std::string const &&>>());
+        CONCEPT_ASSERT(ConvertibleTo<range_value_t<Rng> &&,
             range_rvalue_reference_t<Rng>>());
-        using I = range_iterator_t<Rng>;
-        static_assert(noexcept(iter_move(std::declval<I>())), "");
         ::models<concepts::InputIterator>(begin(rng));
         ::models_not<concepts::ForwardIterator>(begin(rng));
-        std::vector<V> expected(begin(rng), end(rng));
+        auto expected = to_vector(rng);
         ::check_equal(expected, {V{0, "hello", "john"},
                                  V{1, "goodbye", "paul"},
                                  V{2, "hello", "george"},
@@ -100,9 +102,9 @@ int main()
         std::stringstream str{"john paul george ringo"};
         using V = std::tuple<int, std::string, std::string>;
         auto && rng = view::zip(vi, vs, istream<std::string>(str));
-        ::models<concepts::Range>(rng);
-        ::models_not<concepts::SizedRange>(rng);
-        ::models_not<concepts::BoundedRange>(rng);
+        ::models<concepts::View>(rng);
+        ::models_not<concepts::SizedView>(rng);
+        ::models_not<concepts::BoundedView>(rng);
         ::models<concepts::InputIterator>(begin(rng));
         ::models_not<concepts::ForwardIterator>(begin(rng));
         std::vector<V> expected;
@@ -116,8 +118,8 @@ int main()
     auto rnd_rng = view::zip(vi, vs);
     using Ref = range_reference_t<decltype(rnd_rng)>;
     static_assert(std::is_same<Ref, common_pair<int &,std::string const &>>::value, "");
-    ::models<concepts::BoundedRange>(rnd_rng);
-    ::models<concepts::SizedRange>(rnd_rng);
+    ::models<concepts::BoundedView>(rnd_rng);
+    ::models<concepts::SizedView>(rnd_rng);
     ::models<concepts::RandomAccessIterator>(begin(rnd_rng));
     auto tmp = cbegin(rnd_rng) + 3;
     CHECK(std::get<0>(*tmp) == 3);
@@ -155,7 +157,7 @@ int main()
         auto v1 = to_<std::vector<MoveOnlyString>>({"x","y","z"});
 
         auto rng = view::zip(v0, v1);
-        ::models<concepts::RandomAccessIterable>(rng);
+        ::models<concepts::RandomAccessRange>(rng);
         std::vector<std::pair<MoveOnlyString, MoveOnlyString>> expected;
         move(rng, ranges::back_inserter(expected));
         ::check_equal(expected | view::keys, {"a","b","c"});
@@ -170,13 +172,18 @@ int main()
         ::check_equal(v1, {"x","y","z"});
 
         std::vector<MoveOnlyString> res;
-        using RRef = std::pair<MoveOnlyString &&, MoveOnlyString &&>;
-        CONCEPT_ASSERT(Same<RRef, range_rvalue_reference_t<decltype(rng)>>());
-        auto proj = [](RRef &&p) -> MoveOnlyString&& { return std::move(p.first); };
-        move(rng, ranges::back_inserter(res), proj);
+        using R = decltype(rng);
+        auto proj =
+            [](range_reference_t<R> p) -> MoveOnlyString& {return p.first;};
+        auto rng2 = rng | view::transform(proj);
+        move(rng2, ranges::back_inserter(res));
         ::check_equal(res, {"a","b","c"});
         ::check_equal(v0, {"","",""});
         ::check_equal(v1, {"x","y","z"});
+        using R2 = decltype(rng2);
+        CONCEPT_ASSERT(Same<range_value_t<R2>, MoveOnlyString>());
+        CONCEPT_ASSERT(Same<range_reference_t<R2>, MoveOnlyString &>());
+        CONCEPT_ASSERT(Same<range_rvalue_reference_t<R2>, MoveOnlyString &&>());
     }
 
     {
@@ -193,10 +200,40 @@ int main()
             common_pair<MoveOnlyString const &, MoveOnlyString const &>>());
         CONCEPT_ASSERT(Same<
             range_rvalue_reference_t<Rng>,
-            std::pair<MoveOnlyString const &&, MoveOnlyString const &&>>());
+            common_pair<MoveOnlyString const &&, MoveOnlyString const &&>>());
         CONCEPT_ASSERT(Same<
             range_common_reference_t<Rng>,
             common_pair<MoveOnlyString const &, MoveOnlyString const &>>());
+    }
+
+    {
+        std::vector<int> v{1,2,3,4};
+        auto moved = v | view::move;
+        using Moved = decltype(moved);
+        CONCEPT_ASSERT(Same<range_reference_t<Moved>, int &&>());
+        auto zipped = view::zip(moved);
+        using Zipped = decltype(zipped);
+        CONCEPT_ASSERT(Same<range_reference_t<Zipped>, common_tuple<int &&> >());
+    }
+
+    // This is actually a test of the logic of view_adaptor. Since the stride view
+    // does not redefine the current member function, the base range's indirect_move
+    // function gets picked up automatically.
+    {
+        auto rng0 = view::zip(vi, vs);
+        auto rng1 = view::stride(rng0, 2);
+        CONCEPT_ASSERT(Same<range_rvalue_reference_t<decltype(rng1)>, range_rvalue_reference_t<decltype(rng0)>>());
+        CONCEPT_ASSERT(Same<range_value_t<decltype(rng1)>, range_value_t<decltype(rng0)>>());
+    }
+
+    // Test for noexcept iter_move
+    {
+        static_assert(noexcept(std::declval<std::unique_ptr<int>&>() = std::declval<std::unique_ptr<int>&&>()), "");
+        std::unique_ptr<int> rg1[10], rg2[10];
+        auto x = view::zip(rg1, rg2);
+        std::pair<std::unique_ptr<int>, std::unique_ptr<int>> p = iter_move(x.begin());
+        auto it = x.begin();
+        static_assert(noexcept(iter_move(it)), "");
     }
 
     return test_result();

@@ -20,19 +20,16 @@
 #ifndef RANGES_V3_EXT_VIEW_RECURSIVE_RANGE_HPP
 #define RANGES_V3_EXT_VIEW_RECURSIVE_RANGE_HPP
 
-#ifndef __CYGWIN__
-#include <mutex>
-#endif
 #include <functional>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/size.hpp>
 #include <range/v3/range.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_interface.hpp>
+#include <range/v3/view_interface.hpp>
 #include <range/v3/utility/concepts.hpp>
 #include <range/v3/utility/optional.hpp>
-#include <range/v3/view/any_range.hpp>
+#include <range/v3/view/any_view.hpp>
 #include <range/v3/view/empty.hpp>
 #include <range/v3/view/concat.hpp>
 
@@ -46,63 +43,49 @@ namespace ranges
         struct recursive_range_fn
         {
         private:
-            using value_type = meta::eval<std::remove_reference<Ref>>;
-            std::function<any_input_range<int>()> fun_;
+            using value_type = meta::_t<std::remove_reference<Ref>>;
+            std::function<any_input_view<int>()> fun_;
 
             struct impl
-              : range_interface<impl>
+              : view_interface<impl>
             {
             private:
                 friend recursive_range_fn;
-                std::function<any_input_range<int>()> const *fun_;
-                mutable optional<any_input_range<int>> rng_;
-            #ifndef __CYGWIN__
-                mutable std::mutex mtx_;
-            #endif
-                any_input_range<int> const &rng() const
+                std::function<any_input_view<int>()> const *fun_;
+                optional<any_input_view<int>> rng_;
+
+                any_input_view<int> &rng()
                 {
-                #ifndef __CYGWIN__
-                    std::lock_guard<std::mutex> lock{mtx_};
-                #endif
                     if(!rng_)
                         rng_ = (*fun_)();
                     return *rng_;
                 }
-                impl(std::function<any_input_range<int>()> const &fun)
+                impl(std::function<any_input_view<int>()> const &fun)
                   : fun_(&fun), rng_{}
-                #ifndef __CYGWIN__
-                  , mtx_{}
-                #endif
                 {}
             public:
                 impl() = default;
                 impl(impl &&) = default;
                 impl(impl const &that)
-                  : fun_(that.fun_), rng_{}
-                #ifndef __CYGWIN__
-                  , mtx_{}
-                #endif
+                  : fun_(that.fun_)
+                  , rng_{}
                 {}
                 impl &operator=(impl &&) = default;
                 impl &operator=(impl const &that)
                 {
                     fun_ = that.fun_;
-                    rng_ = that.rng_;
+                    rng_.reset();
                     return *this;
                 }
-                range_iterator_t<any_input_range<int>> begin() const
+                range_iterator_t<any_input_view<int>> begin()
                 {
                     return ranges::begin(rng());
                 }
-                range_sentinel_t<any_input_range<int>> end() const
+                range_sentinel_t<any_input_view<int>> end()
                 {
                     return ranges::end(rng());
                 }
-                any_input_range<int> & base()
-                {
-                    return rng();
-                }
-                any_input_range<int> const & base() const
+                any_input_view<int> & base()
                 {
                     return rng();
                 }
@@ -110,10 +93,7 @@ namespace ranges
         public:
             template<typename Fun,
                 CONCEPT_REQUIRES_(Function<Fun>() &&
-                                  Convertible<
-                                    concepts::Function::result_t<Fun>,
-                                    any_input_range<Ref>
-                                  >())>
+                    ConvertibleTo<concepts::Function::result_t<Fun>, any_input_view<Ref>>())>
             explicit recursive_range_fn(Fun fun)
               : fun_{[=](){return view::concat(fun(), view::empty<value_type>());}}
             {}

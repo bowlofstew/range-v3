@@ -21,7 +21,6 @@
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/pipeable.hpp>
 #include <range/v3/utility/common_iterator.hpp>
 #include <range/v3/action/concepts.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -52,7 +51,7 @@ namespace ranges
 
             template<typename Cont, typename Rng,
                 typename C = range_common_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterable<Rng>())>
+                CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Range<Rng>())>
             auto insert(Cont && cont, Rng && rng) ->
                 decltype(unwrap_reference(cont).insert(C{begin(rng)}, C{end(rng)}))
             {
@@ -77,28 +76,78 @@ namespace ranges
                 return unwrap_reference(cont).insert(p, n, std::forward<T>(t));
             }
 
+            /// \cond
+            namespace detail
+            {
+                template<typename Cont, typename P, typename I, typename S,
+                    typename C = common_iterator<I, S>,
+                    CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterator<P>() && IteratorRange<I, S>())>
+                auto insert_impl(Cont && cont, P p, I i, S j, std::false_type) ->
+                    decltype(unwrap_reference(cont).insert(p, C{i}, C{j}))
+                {
+                    return unwrap_reference(cont).insert(p, C{i}, C{j});
+                }
+
+                template<typename Cont, typename P, typename I, typename S,
+                    typename C = common_iterator<I, S>,
+                    CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterator<P>() && SizedIteratorRange<I, S>() &&
+                                      RandomAccessReservable<Cont>())>
+                auto insert_impl(Cont && cont, P p, I i, S j, std::true_type) ->
+                    decltype(unwrap_reference(cont).insert(begin(unwrap_reference(cont)), C{i}, C{j}))
+                {
+                    auto const index = p - unwrap_reference(cont).begin();
+                    unwrap_reference(cont).reserve(unwrap_reference(cont).size() + (j - i));
+                    return unwrap_reference(cont).insert(begin(unwrap_reference(cont)) + index, C{i}, C{j});
+                }
+
+
+                template<typename Cont, typename I, typename Rng,
+                    typename C = range_common_iterator_t<Rng>,
+                    CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterator<I>() && Range<Rng>())>
+                auto insert_impl(Cont && cont, I p, Rng && rng, std::false_type) ->
+                    decltype(unwrap_reference(cont).insert(p, C{begin(rng)}, C{end(rng)}))
+                {
+                    return unwrap_reference(cont).insert(p, C{begin(rng)}, C{end(rng)});
+                }
+
+                template<typename Cont, typename I, typename Rng,
+                    typename C = range_common_iterator_t<Rng>,
+                    CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterator<I>() && SizedRange<Rng>() &&
+                                      RandomAccessReservable<Cont>())>
+                auto insert_impl(Cont && cont, I p, Rng && rng, std::true_type) ->
+                    decltype(unwrap_reference(cont).insert(begin(unwrap_reference(cont)), C{begin(rng)}, C{end(rng)}))
+                {
+                    auto const index = p - begin(unwrap_reference(cont));
+                    unwrap_reference(cont).reserve(unwrap_reference(cont).size() + size(rng));
+                    return unwrap_reference(cont).insert(begin(unwrap_reference(cont)) + index, C{begin(rng)}, C{end(rng)});
+                }
+            }
+            /// \endcond
+
             template<typename Cont, typename P, typename I, typename S,
                 typename C = common_iterator<I, S>,
                 CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterator<P>() && IteratorRange<I, S>())>
-            auto insert(Cont && cont, P p, I i, S j) ->
-                decltype(unwrap_reference(cont).insert(p, C{i}, C{j}))
-            {
-                return unwrap_reference(cont).insert(p, C{i}, C{j});
-            }
+            auto insert(Cont && cont, P p, I i, S j)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                detail::insert_impl(std::forward<Cont>(cont), std::move(p), std::move(i), std::move(j),
+                                    meta::fast_and<RandomAccessReservable<Cont>, SizedIteratorRange<I, S>>{})
+            )
 
             template<typename Cont, typename I, typename Rng,
                 typename C = range_common_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterator<I>() && Iterable<Rng>())>
-            auto insert(Cont && cont, I p, Rng && rng) ->
-                decltype(unwrap_reference(cont).insert(p, C{begin(rng)}, C{end(rng)}))
-            {
-                return unwrap_reference(cont).insert(p, C{begin(rng)}, C{end(rng)});
-            }
+                CONCEPT_REQUIRES_(LvalueContainerLike<Cont>() && Iterator<I>() && Range<Rng>())>
+            auto insert(Cont && cont, I p, Rng && rng)
+            RANGES_DECLTYPE_AUTO_RETURN
+            (
+                detail::insert_impl(std::forward<Cont>(cont), std::move(p), std::forward<Rng>(rng),
+                                    meta::fast_and<RandomAccessReservable<Cont>, SizedRange<Rng>>{})
+            )
 
             struct insert_fn
             {
                 template<typename Rng, typename T,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && Constructible<range_value_t<Rng>, T &&>())>
+                    CONCEPT_REQUIRES_(Range<Rng>() && Constructible<range_value_t<Rng>, T &&>())>
                 auto operator()(Rng && rng, T && t) const ->
                     decltype(insert(std::forward<Rng>(rng), std::forward<T>(t)))
                 {
@@ -106,7 +155,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename Rng2,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && Iterable<Rng2>())>
+                    CONCEPT_REQUIRES_(Range<Rng>() && Range<Rng2>())>
                 auto operator()(Rng && rng, Rng2 && rng2) const ->
                     decltype(insert(std::forward<Rng>(rng), std::forward<Rng2>(rng2)))
                 {
@@ -116,7 +165,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename T,
-                    CONCEPT_REQUIRES_(Iterable<Rng>())>
+                    CONCEPT_REQUIRES_(Range<Rng>())>
                 auto operator()(Rng && rng, std::initializer_list<T> rng2) const ->
                     decltype(insert(std::forward<Rng>(rng), rng2))
                 {
@@ -124,7 +173,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename I, typename S,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && IteratorRange<I, S>())>
+                    CONCEPT_REQUIRES_(Range<Rng>() && IteratorRange<I, S>())>
                 auto operator()(Rng && rng, I i, S j) const ->
                     decltype(insert(std::forward<Rng>(rng), i, j))
                 {
@@ -132,7 +181,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename I, typename T,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && Iterator<I>() &&
+                    CONCEPT_REQUIRES_(Range<Rng>() && Iterator<I>() &&
                         Constructible<range_value_t<Rng>, T &&>())>
                 auto operator()(Rng && rng, I p, T && t) const ->
                     decltype(insert(std::forward<Rng>(rng), p, std::forward<T>(t)))
@@ -141,7 +190,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename I, typename Rng2,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && Iterator<I>() && Iterable<Rng2>())>
+                    CONCEPT_REQUIRES_(Range<Rng>() && Iterator<I>() && Range<Rng2>())>
                 auto operator()(Rng && rng, I p, Rng2 && rng2) const ->
                     decltype(insert(std::forward<Rng>(rng), p, std::forward<Rng2>(rng2)))
                 {
@@ -151,7 +200,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename I, typename T,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && Iterator<I>())>
+                    CONCEPT_REQUIRES_(Range<Rng>() && Iterator<I>())>
                 auto operator()(Rng && rng, I p, std::initializer_list<T> rng2) const ->
                     decltype(insert(std::forward<Rng>(rng), p, rng2))
                 {
@@ -159,7 +208,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename I, typename N, typename T,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && Iterator<I>() && Integral<N>()
+                    CONCEPT_REQUIRES_(Range<Rng>() && Iterator<I>() && Integral<N>()
                         && Constructible<range_value_t<Rng>, T &&>())>
                 auto operator()(Rng && rng, I p, N n, T && t) const ->
                     decltype(insert(std::forward<Rng>(rng), p, n, std::forward<T>(t)))
@@ -168,7 +217,7 @@ namespace ranges
                 }
 
                 template<typename Rng, typename P, typename I, typename S,
-                    CONCEPT_REQUIRES_(Iterable<Rng>() && Iterator<P>() && IteratorRange<I, S>())>
+                    CONCEPT_REQUIRES_(Range<Rng>() && Iterator<P>() && IteratorRange<I, S>())>
                 auto operator()(Rng && rng, P p, I i, S j) const ->
                     decltype(insert(std::forward<Rng>(rng), p, i, j))
                 {
@@ -193,11 +242,11 @@ namespace ranges
         /// @{
         namespace concepts
         {
-            struct InsertableIterable
-              : refines<Iterable(_1)>
+            struct InsertableRange
+              : refines<Range(_1)>
             {
                 template<typename Rng, typename...Rest>
-                auto requires_(Rng && rng, Rest &&... rest) -> decltype(
+                auto requires_(Rng&& rng, Rest&&... rest) -> decltype(
                     concepts::valid_expr(
                         (ranges::insert(std::forward<Rng>(rng), std::forward<Rest>(rest)...), 42)
                     ));
@@ -205,7 +254,7 @@ namespace ranges
         }
 
         template<typename Rng, typename...Rest>
-        using InsertableIterable = concepts::models<concepts::InsertableIterable, Rng, Rest...>;
+        using InsertableRange = concepts::models<concepts::InsertableRange, Rng, Rest...>;
         /// @}
     }
 }

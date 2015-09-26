@@ -16,9 +16,10 @@
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/utility/box.hpp>
-#include <range/v3/utility/integer_sequence.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 
 namespace ranges
@@ -32,7 +33,7 @@ namespace ranges
             struct compressed_tuple_data;
 
             template<std::size_t...Is, typename...Ts>
-            struct compressed_tuple_data<index_sequence<Is...>, Ts...>
+            struct compressed_tuple_data<meta::index_sequence<Is...>, Ts...>
               : box<Ts, std::integral_constant<std::size_t, Is>>...
             {
                 constexpr compressed_tuple_data() = default;
@@ -69,7 +70,7 @@ namespace ranges
             {}
         private:
             friend struct detail::compressed_tuple_core_access;
-            detail::compressed_tuple_data<make_index_sequence<sizeof...(Ts)>, Ts...> data_;
+            detail::compressed_tuple_data<meta::make_index_sequence<sizeof...(Ts)>, Ts...> data_;
         };
 
         // Get by index
@@ -96,11 +97,12 @@ namespace ranges
 
         struct make_compressed_tuple_fn
         {
+            using expects_wrapped_references = void;
             template<typename...Ts>
             constexpr auto operator()(Ts &&... ts) const ->
-                compressed_tuple<Ts...>
+                compressed_tuple<bind_element_t<Ts>...>
             {
-                return compressed_tuple<Ts...>{detail::forward<Ts>(ts)...};
+                return compressed_tuple<bind_element_t<Ts>...>{detail::forward<Ts>(ts)...};
             }
         };
         

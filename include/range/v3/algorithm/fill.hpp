@@ -39,8 +39,8 @@ namespace ranges
 
             template<typename Rng, typename V,
                 typename O = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(OutputIterable<Rng &, V>())>
-            O operator()(Rng & rng, V const & val) const
+                CONCEPT_REQUIRES_(OutputRange<Rng, V>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, V const & val) const
             {
                 return (*this)(begin(rng), end(rng), val);
             }
@@ -50,7 +50,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& fill = static_const<fill_fn>::value;
+            constexpr auto&& fill = static_const<with_braced_init_args<fill_fn>>::value;
         }
 
         /// @}

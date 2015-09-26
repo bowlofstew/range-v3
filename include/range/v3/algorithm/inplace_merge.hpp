@@ -36,7 +36,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/swap.hpp>
 #include <range/v3/algorithm/lower_bound.hpp>
 #include <range/v3/algorithm/upper_bound.hpp>
@@ -87,8 +86,8 @@ namespace ranges
                     std::ptrdiff_t buf_size, C pred_ = C{}, P proj_ = P{}) const
                 {
                     using D = iterator_difference_t<I>;
-                    auto &&pred = invokable(pred_);
-                    auto &&proj = invokable(proj_);
+                    auto &&pred = as_function(pred_);
+                    auto &&proj = as_function(proj_);
                     while(true)
                     {
                         // if middle == end, we're done
@@ -216,16 +215,19 @@ namespace ranges
                     h.reset(buf.first);
                 }
                 detail::merge_adaptive(std::move(begin), std::move(middle), len2_and_end.second,
-                    len1, len2_and_end.first, buf.first, buf.second, std::move(pred), std::move(proj));
+                    len1, len2_and_end.first, buf.first, buf.second, std::move(pred),
+                    std::move(proj));
                 return len2_and_end.second;
             }
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(BidirectionalIterable<Rng &>() && Sortable<I, C, P>())>
-            I operator()(Rng &rng, I middle, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(BidirectionalRange<Rng>() && Sortable<I, C, P>())>
+            range_safe_iterator_t<Rng>
+            operator()(Rng &&rng, I middle, C pred = C{}, P proj = P{}) const
             {
-                return (*this)(begin(rng), std::move(middle), end(rng), std::move(pred), std::move(proj));
+                return (*this)(begin(rng), std::move(middle), end(rng), std::move(pred),
+                    std::move(proj));
             }
         };
 
@@ -233,7 +235,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& inplace_merge = static_const<inplace_merge_fn>::value;
+            constexpr auto&& inplace_merge = static_const<with_braced_init_args<inplace_merge_fn>>::value;
         }
 
         /// @}

@@ -15,11 +15,13 @@
 #define RANGES_V3_VIEW_UNIQUE_HPP
 
 #include <utility>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/adjacent_remove_if.hpp>
 #include <range/v3/view/view.hpp>
+#include <range/v3/view/all.hpp>
 
 namespace ranges
 {
@@ -33,22 +35,22 @@ namespace ranges
             {
                 template<typename Rng>
                 using Concept = meta::and_<
-                    ForwardIterable<Rng>,
+                    ForwardRange<Rng>,
                     EqualityComparable<range_value_t<Rng>>>;
 
                 template<typename Rng, CONCEPT_REQUIRES_(Concept<Rng>())>
-                unique_view<Rng> operator()(Rng && rng) const
+                unique_view<all_t<Rng>> operator()(Rng && rng) const
                 {
-                    return {std::forward<Rng>(rng), equal_to{}};
+                    return {all(std::forward<Rng>(rng)), equal_to{}};
                 }
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Rng,
                     CONCEPT_REQUIRES_(!Concept<Rng>())>
                 void operator()(Rng &&) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
                         "The object on which view::unique operates must be a model the "
-                        "ForwardIterable concept.");
+                        "ForwardRange concept.");
                     CONCEPT_ASSERT_MSG(EqualityComparable<range_value_t<Rng>>(),
                         "The value type of the range passed to view::unique must be "
                         "EqualityComparable.");

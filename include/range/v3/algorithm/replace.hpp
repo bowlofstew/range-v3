@@ -13,6 +13,7 @@
 #ifndef RANGES_V3_ALGORITHM_REPLACE_HPP
 #define RANGES_V3_ALGORITHM_REPLACE_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -20,7 +21,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/static_const.hpp>
 
 namespace ranges
@@ -31,7 +31,7 @@ namespace ranges
         template<typename I, typename T0, typename T1, typename P = ident>
         using Replaceable = meta::fast_and<
             InputIterator<I>,
-            IndirectInvokableRelation<equal_to, Project<I, P>, T0 const *>,
+            IndirectCallableRelation<equal_to, Projected<I, P>, T0 const *>,
             Writable<I, T1>>;
 
         /// \addtogroup group-algorithms
@@ -42,7 +42,7 @@ namespace ranges
                 CONCEPT_REQUIRES_(Replaceable<I, T0, T1, P>() && IteratorRange<I, S>())>
             I operator()(I begin, S end, T0 const & old_value, T1 const & new_value, P proj_ = {}) const
             {
-                auto &&proj = invokable(proj_);
+                auto &&proj = as_function(proj_);
                 for(; begin != end; ++begin)
                     if(proj(*begin) == old_value)
                         *begin = new_value;
@@ -51,8 +51,9 @@ namespace ranges
 
             template<typename Rng, typename T0, typename T1, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Replaceable<I, T0, T1, P>() && Iterable<Rng &>())>
-            I operator()(Rng & rng, T0 const & old_value, T1 const & new_value, P proj = {}) const
+                CONCEPT_REQUIRES_(Replaceable<I, T0, T1, P>() && Range<Rng>())>
+            range_safe_iterator_t<Rng>
+            operator()(Rng &&rng, T0 const & old_value, T1 const & new_value, P proj = {}) const
             {
                 return (*this)(begin(rng), end(rng), old_value, new_value, std::move(proj));
             }
@@ -62,7 +63,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& replace = static_const<replace_fn>::value;
+            constexpr auto&& replace = static_const<with_braced_init_args<replace_fn>>::value;
         }
 
         /// @}

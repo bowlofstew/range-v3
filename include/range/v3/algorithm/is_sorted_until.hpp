@@ -34,20 +34,20 @@ namespace ranges
             ///
             /// range-based version of the \c is_sorted_until std algorithm
             ///
-            /// Works on ForwardRanges
+            /// Works on ForwardViews
             ///
-            /// \pre `Rng` is a model of the `ForwardRange` concept
+            /// \pre `Rng` is a model of the `ForwardView` concept
             /// \pre `I` is a model of the `ForwardIterator` concept
             /// \pre `S` is a model of the `Sentinel<I>` concept
             /// \pre `R` is a model of the `Relation<Value_Type<I>>` concept
             ///
             template<typename I, typename S, typename R = ordered_less, typename P = ident,
                 CONCEPT_REQUIRES_(ForwardIterator<I>() && IteratorRange<I, S>() &&
-                    IndirectInvokableRelation<R, Project<I, P>>())>
+                    IndirectCallableRelation<R, Projected<I, P>>())>
             I operator()(I begin, S end, R pred_ = R{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 auto i = begin;
                 if(begin != end)
                 {
@@ -63,9 +63,9 @@ namespace ranges
 
             template<typename Rng, typename R = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(ForwardIterable<Rng &>() &&
-                    IndirectInvokableRelation<R, Project<I, P>>())>
-            I operator()(Rng &rng, R pred = R{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(ForwardRange<Rng>() &&
+                    IndirectCallableRelation<R, Projected<I, P>>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, R pred = R{}, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -75,7 +75,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& is_sorted_until = static_const<is_sorted_until_fn>::value;
+            constexpr auto&& is_sorted_until = static_const<with_braced_init_args<is_sorted_until_fn>>::value;
         }
 
         /// @}

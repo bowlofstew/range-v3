@@ -15,6 +15,7 @@
 #define RANGES_V3_UTILITY_ITERATOR_TRAITS_HPP
 
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 
@@ -45,59 +46,26 @@ namespace ranges
         using iterator_difference_t = concepts::WeaklyIncrementable::difference_t<I>;
 
         template<typename I>
-        using iterator_pointer_t = concepts::Readable::pointer_t<I>;
-
-        template<typename I>
-        using iterator_size_t = meta::eval<std::make_unsigned<iterator_difference_t<I>>>;
+        using iterator_size_t = meta::_t<std::make_unsigned<iterator_difference_t<I>>>;
 
         // Metafunctions
         template<typename I>
-        struct iterator_category
-        {
-            using type = iterator_category_t<I>;
-        };
+        using iterator_value = meta::defer<iterator_value_t, I>;
 
         template<typename I>
-        struct iterator_value
-        {
-            using type = iterator_value_t<I>;
-        };
+        using iterator_difference = meta::defer<iterator_difference_t, I>;
 
         template<typename I>
-        struct iterator_difference
-        {
-            using type = iterator_difference_t<I>;
-        };
+        using iterator_reference = meta::defer<iterator_reference_t, I>;
 
         template<typename I>
-        struct iterator_pointer
-        {
-            using type = iterator_pointer_t<I>;
-        };
+        using iterator_rvalue_reference = meta::defer<iterator_rvalue_reference_t, I>;
 
         template<typename I>
-        struct iterator_reference
-        {
-            using type = iterator_reference_t<I>;
-        };
+        using iterator_common_reference = meta::defer<iterator_common_reference_t, I>;
 
         template<typename I>
-        struct iterator_rvalue_reference
-        {
-            using type = iterator_rvalue_reference_t<I>;
-        };
-
-        template<typename I>
-        struct iterator_common_reference
-        {
-            using type = iterator_common_reference_t<I>;
-        };
-
-        template<typename I>
-        struct iterator_size
-        {
-            using type = iterator_size_t<I>;
-        };
+        using iterator_size = meta::defer<iterator_size_t, I>;
         /// @}
     }
 }

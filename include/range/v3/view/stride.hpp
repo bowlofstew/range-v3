@@ -17,18 +17,20 @@
 #include <atomic>
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/size.hpp>
 #include <range/v3/distance.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_adaptor.hpp>
+#include <range/v3/view_adaptor.hpp>
 #include <range/v3/utility/box.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/view.hpp>
+#include <range/v3/view/all.hpp>
 
 namespace ranges
 {
@@ -38,87 +40,78 @@ namespace ranges
         /// @{
         template<typename Rng>
         struct stride_view
-          : range_adaptor<stride_view<Rng>, Rng>
+          : view_adaptor<
+                stride_view<Rng>,
+                Rng,
+                is_finite<Rng>::value ? finite : range_cardinality<Rng>::value>
         {
         private:
             friend range_access;
             using size_type_ = range_size_t<Rng>;
             using difference_type_ = range_difference_t<Rng>;
 
-            // Bidirectional stride iterators need a runtime boolean to keep track
-            // of when the offset variable is dirty and needs to be lazily calculated.
-            // Ditto for random-access stride iterators when the end is a sentinel.
-            // If the size of the range is known a priori, then the runtime boolean
-            // is always unnecessary.
-            using dirty_t =
-                meta::if_c<
-                    (BidirectionalIterable<Rng>() && !SizedIterable<Rng>()),
-                    mutable_<std::atomic<bool>>,
-                    constant<bool, false>>;
-
             // Bidirectional and random-access stride iterators need to remember how
             // far past they end they are, so that when they're decremented, they can
             // visit the correct elements.
             using offset_t =
                 meta::if_<
-                    BidirectionalIterable<Rng>,
+                    BidirectionalRange<Rng>,
                     mutable_<std::atomic<difference_type_>>,
                     constant<difference_type_, 0>>;
 
             difference_type_ stride_;
 
-            struct adaptor : adaptor_base, private dirty_t, private offset_t
+            struct adaptor : adaptor_base, private offset_t
             {
             private:
                 using iterator = ranges::range_iterator_t<Rng>;
                 stride_view const *rng_;
-                dirty_t & dirty() { return *this; }
-                dirty_t const & dirty() const { return *this; }
                 offset_t & offset() { return *this; }
                 offset_t const & offset() const { return *this; }
+                CONCEPT_REQUIRES(BidirectionalRange<Rng>())
                 void clean() const
                 {
-                    // Harmless race here. Two threads might compute offset and set it
-                    // independently, but the result would be the same.
-                    if(dirty())
+                    std::atomic<difference_type_> &off = offset();
+                    if(off == -1)
                     {
-                        do_clean();
-                        dirty() = false;
+                        difference_type_ expected = -1;
+                        // Set the offset if it's still -1. If not, leave it alone.
+                        (void) off.compare_exchange_strong(expected, calc_offset());
                     }
                 }
-                void do_clean() const
+                difference_type_ calc_offset() const
                 {
                     auto tmp = ranges::distance(rng_->base()) % rng_->stride_;
-                    offset() = 0 != tmp ? rng_->stride_ - tmp : tmp;
+                    return 0 != tmp ? rng_->stride_ - tmp : tmp;
                 }
             public:
                 adaptor() = default;
                 adaptor(stride_view const &rng, begin_tag)
-                  : dirty_t(false), offset_t(0), rng_(&rng)
+                  : offset_t(0), rng_(&rng)
                 {}
                 adaptor(stride_view const &rng, end_tag)
-                  : dirty_t(true), offset_t(0), rng_(&rng)
+                  : offset_t(-1), rng_(&rng)
                 {
                     // Opportunistic eager cleaning when we can do so in O(1)
-                    if(BidirectionalIterable<Rng>() && SizedIterable<Rng>())
-                        do_clean();
+                    if(BidirectionalRange<Rng>() && SizedRange<Rng>())
+                        offset() = calc_offset();
                 }
                 void next(iterator &it)
                 {
                     RANGES_ASSERT(0 == offset());
                     RANGES_ASSERT(it != ranges::end(rng_->mutable_base()));
-                    offset() = advance_bounded(it, rng_->stride_ + offset(),
+                    offset() = ranges::advance(it, rng_->stride_ + offset(),
                         ranges::end(rng_->mutable_base()));
                 }
-                CONCEPT_REQUIRES(BidirectionalIterable<Rng>())
+                CONCEPT_REQUIRES(BidirectionalRange<Rng>())
                 void prev(iterator &it)
                 {
                     clean();
-                    offset() = advance_bounded(it, -rng_->stride_ + offset(),
+                    offset() = ranges::advance(it, -rng_->stride_ + offset(),
                         ranges::begin(rng_->mutable_base()));
                     RANGES_ASSERT(0 == offset());
                 }
-                CONCEPT_REQUIRES(RandomAccessIterable<Rng>())
+                CONCEPT_REQUIRES(RandomAccessRange<Rng>())
                 difference_type_ distance_to(iterator here, iterator there, adaptor const &that) const
                 {
                     clean();
@@ -127,16 +120,16 @@ namespace ranges
                     RANGES_ASSERT(0 == ((there - here) + that.offset() - offset()) % rng_->stride_);
                     return ((there - here) + that.offset() - offset()) / rng_->stride_;
                 }
-                CONCEPT_REQUIRES(RandomAccessIterable<Rng>())
+                CONCEPT_REQUIRES(RandomAccessRange<Rng>())
                 void advance(iterator &it, difference_type_ n)
                 {
                     if(n != 0)
                         clean();
                     if(0 < n)
-                        offset() = advance_bounded(it, n * rng_->stride_ + offset(),
+                        offset() = ranges::advance(it, n * rng_->stride_ + offset(),
                             ranges::end(rng_->mutable_base()));
                     else if(0 > n)
-                        offset() = advance_bounded(it, n * rng_->stride_ + offset(),
+                        offset() = ranges::advance(it, n * rng_->stride_ + offset(),
                             ranges::begin(rng_->mutable_base()));
                 }
             };
@@ -144,30 +137,30 @@ namespace ranges
             {
                 return {*this, begin_tag{}};
             }
-            // If the underlying sequence object doesn't model BoundedIterable, then we can't
+            // If the underlying sequence object doesn't model BoundedRange, then we can't
             // decrement the end and there's no reason to adapt the sentinel. Strictly
             // speaking, we don't have to adapt the end iterator of Input and Forward
-            // Iterables, but in the interests of making the resulting stride view model
-            // BoundedRange, adapt it anyway.
-            CONCEPT_REQUIRES(!BoundedIterable<Rng>())
+            // Ranges, but in the interests of making the resulting stride view model
+            // BoundedView, adapt it anyway.
+            CONCEPT_REQUIRES(!BoundedRange<Rng>())
             adaptor_base end_adaptor() const
             {
                 return {};
             }
-            CONCEPT_REQUIRES(BoundedIterable<Rng>())
+            CONCEPT_REQUIRES(BoundedRange<Rng>())
             adaptor end_adaptor() const
             {
                 return {*this, end_tag{}};
             }
         public:
             stride_view() = default;
-            stride_view(Rng &&rng, difference_type_ stride)
-              : range_adaptor_t<stride_view>{std::forward<Rng>(rng)}
+            stride_view(Rng rng, difference_type_ stride)
+              : view_adaptor_t<stride_view>{std::move(rng)}
               , stride_(stride)
             {
                 RANGES_ASSERT(0 < stride_);
             }
-            CONCEPT_REQUIRES(SizedIterable<Rng>())
+            CONCEPT_REQUIRES(SizedRange<Rng>())
             size_type_ size() const
             {
                 return (ranges::size(this->base()) + static_cast<size_type_>(stride_) - 1) /
@@ -187,7 +180,16 @@ namespace ranges
                 (
                     make_pipeable(std::bind(stride, std::placeholders::_1, std::move(step)))
                 )
+            public:
+                template<typename Rng, CONCEPT_REQUIRES_(InputRange<Rng>())>
+                stride_view<all_t<Rng>> operator()(Rng && rng, range_difference_t<Rng> step) const
+                {
+                    return {all(std::forward<Rng>(rng)), step};
+                }
+
+                // For the purpose of better error messages:
             #ifndef RANGES_DOXYGEN_INVOKED
+            private:
                 template<typename Difference, CONCEPT_REQUIRES_(!Integral<Difference>())>
                 static detail::null_pipe bind(stride_fn, Difference &&)
                 {
@@ -197,23 +199,14 @@ namespace ranges
                         "difference type.");
                     return {};
                 }
-            #endif
-
             public:
-                template<typename Rng, CONCEPT_REQUIRES_(InputIterable<Rng>())>
-                stride_view<Rng> operator()(Rng && rng, range_difference_t<Rng> step) const
-                {
-                    return {std::forward<Rng>(rng), step};
-                }
-
-            #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Rng, typename T,
-                    CONCEPT_REQUIRES_(!InputIterable<Rng>())>
+                    CONCEPT_REQUIRES_(!InputRange<Rng>())>
                 void operator()(Rng &&, T &&) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
                         "The object to be operated on by view::stride should be a model of the "
-                        "InputIterable concept.");
+                        "InputRange concept.");
                     CONCEPT_ASSERT_MSG(Integral<T>(),
                         "The value to be used as the step in a call to view::stride must be a "
                         "model of the Integral concept that is convertible to the range's "

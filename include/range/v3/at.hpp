@@ -16,6 +16,7 @@
 
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
+#include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -29,7 +30,8 @@ namespace ranges
         {
             /// \return `begin(rng)[n]`
             template<typename Rng,
-                CONCEPT_REQUIRES_(RandomAccessIterable<Rng>())>
+                CONCEPT_REQUIRES_(RandomAccessRange<Rng>())>
+            RANGES_CXX14_CONSTEXPR
             auto operator()(Rng &&rng, range_difference_t<Rng> n) const ->
                 decltype(begin(rng)[n])
             {

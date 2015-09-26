@@ -16,8 +16,8 @@
 
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_facade.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/view_facade.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 
 namespace ranges
@@ -36,7 +36,7 @@ namespace ranges
         //    semantics.
         template<typename Val>
         struct repeat_view
-          : range_facade<repeat_view<Val>, true>
+          : view_facade<repeat_view<Val>, infinite>
         {
         private:
             Val value_;
@@ -59,8 +59,20 @@ namespace ranges
                 {
                     return false;
                 }
-                void next() const
+                bool equal(cursor const &) const
+                {
+                    return true;
+                }
+                void next()
                 {}
+                void prev()
+                {}
+                void advance(std::ptrdiff_t)
+                {}
+                std::ptrdiff_t distance_to(cursor const &) const
+                {
+                    return 0;
+                }
             };
             cursor begin_cursor() const
             {

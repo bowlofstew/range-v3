@@ -20,7 +20,6 @@
 #include <range/v3/range_traits.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 
@@ -44,9 +43,9 @@ namespace ranges
             I0 operator()(I0 begin0, S0 end0, I1 begin1, S1 end1, R pred_ = R{}, P0 proj0_ = P0{},
                 P1 proj1_ = P1{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj0 = invokable(proj0_);
-                auto &&proj1 = invokable(proj1_);
+                auto &&pred = as_function(pred_);
+                auto &&proj0 = as_function(proj0_);
+                auto &&proj1 = as_function(proj1_);
                 for(; begin0 != end0; ++begin0)
                     for(auto tmp = begin1; tmp != end1; ++tmp)
                         if(pred(proj0(*begin0), proj1(*tmp)))
@@ -58,9 +57,9 @@ namespace ranges
                      typename P0 = ident, typename P1 = ident,
                      typename I0 = range_iterator_t<Rng0>,
                      typename I1 = range_iterator_t<Rng1>,
-                     CONCEPT_REQUIRES_(Iterable<Rng0>() && Iterable<Rng1>() &&
+                     CONCEPT_REQUIRES_(Range<Rng0>() && Range<Rng1>() &&
                         ForwardIterator<I1>() && AsymmetricallyComparable<I0, I1, R, P0, P1>())>
-            I0 operator()(Rng0 & rng0, Rng1 && rng1, R pred = R{}, P0 proj0 = P0{},
+            range_safe_iterator_t<Rng0> operator()(Rng0 &&rng0, Rng1 &&rng1, R pred = R{}, P0 proj0 = P0{},
                 P1 proj1 = P1{}) const
             {
                 return (*this)(begin(rng0), end(rng0), begin(rng1), end(rng1), std::move(pred),

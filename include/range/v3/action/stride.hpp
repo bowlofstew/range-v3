@@ -48,11 +48,11 @@ namespace ranges
                         typename I = range_iterator_t<Rng>,
                         typename S = range_sentinel_t<Rng>,
                         typename D = range_difference_t<Rng>>
-                    auto requires_(Rng rng, T) -> decltype(
+                    auto requires_(Rng&&, T&&) -> decltype(
                         concepts::valid_expr(
-                            concepts::model_of<concepts::ForwardIterable, Rng>(),
-                            concepts::model_of<concepts::EraseableIterable, Rng, I, S>(),
-                            concepts::model_of<concepts::Convertible, T, D>(),
+                            concepts::model_of<concepts::ForwardRange, Rng>(),
+                            concepts::model_of<concepts::ErasableRange, Rng, I, S>(),
+                            concepts::model_of<concepts::ConvertibleTo, T, D>(),
                             concepts::is_true(Permutable<I>())
                         ));
                 };
@@ -73,8 +73,8 @@ namespace ranges
                         S const end = ranges::end(rng);
                         if(begin != end)
                         {
-                            for(I i = next_bounded(++begin, step-1, end); i != end;
-                                advance_bounded(i, step, end), ++begin)
+                            for(I i = ranges::next(++begin, step-1, end); i != end;
+                                advance(i, step, end), ++begin)
                             {
                                 *begin = iter_move(i);
                             }
@@ -89,14 +89,14 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, T>())>
                 void operator()(Rng &&, T &&) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
                         "The object on which action::stride operates must be a model of the "
-                        "ForwardIterable concept.");
+                        "ForwardRange concept.");
                     using I = range_iterator_t<Rng>;
                     using S = range_sentinel_t<Rng>;
-                    CONCEPT_ASSERT_MSG(EraseableIterable<Rng, I, S>(),
+                    CONCEPT_ASSERT_MSG(ErasableRange<Rng, I, S>(),
                         "The object on which action::stride operates must allow element removal.");
-                    CONCEPT_ASSERT_MSG(Convertible<T, range_difference_t<Rng>>(),
+                    CONCEPT_ASSERT_MSG(ConvertibleTo<T, range_difference_t<Rng>>(),
                         "The stride argument to action::stride must be convertible to the range's "
                         "difference type.");
                     CONCEPT_ASSERT_MSG(Permutable<I>(),

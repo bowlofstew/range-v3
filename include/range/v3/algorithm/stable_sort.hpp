@@ -49,7 +49,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/counted_iterator.hpp>
 #include <range/v3/algorithm/merge_move.hpp>
 #include <range/v3/algorithm/sort.hpp>
@@ -156,9 +155,9 @@ namespace ranges
                     IteratorRange<I, S>())>
             I operator()(I begin, S end_, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto && pred = invokable(pred_);
-                auto && proj = invokable(proj_);
-                I end = next_to(begin, end_);
+                auto && pred = as_function(pred_);
+                auto && proj = as_function(proj_);
+                I end = ranges::next(begin, end_);
                 using D = iterator_difference_t<I>;
                 using V = iterator_value_t<I>;
                 D len = end - begin;
@@ -173,8 +172,8 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Sortable<I, C, P>() && RandomAccessIterable<Rng &>())>
-            I operator()(Rng & rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(Sortable<I, C, P>() && RandomAccessRange<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -184,7 +183,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& stable_sort = static_const<stable_sort_fn>::value;
+            constexpr auto&& stable_sort = static_const<with_braced_init_args<stable_sort_fn>>::value;
         }
 
         /// @}

@@ -25,7 +25,7 @@
 
 namespace ranges
 {
-    inline namespace v3 
+    inline namespace v3
     {
         // TODO Look at all the special cases handled by erase_if in Library Fundamentals 2
 
@@ -37,7 +37,7 @@ namespace ranges
             {
             private:
                 friend action_access;
-                template<typename C, typename P = ident, CONCEPT_REQUIRES_(!Iterable<C>())>
+                template<typename C, typename P = ident, CONCEPT_REQUIRES_(!Range<C>())>
                 static auto bind(remove_if_fn remove_if, C pred, P proj = P{})
                 RANGES_DECLTYPE_AUTO_RETURN
                 (
@@ -49,10 +49,10 @@ namespace ranges
                 {
                     template<typename Rng, typename C, typename P = ident,
                         typename I = range_iterator_t<Rng>>
-                    auto requires_(Rng rng, C pred, P proj = P{}) -> decltype(
+                    auto requires_(Rng&&, C&&, P&& = P{}) -> decltype(
                         concepts::valid_expr(
-                            concepts::model_of<concepts::ForwardIterable, Rng>(),
-                            concepts::model_of<concepts::EraseableIterable, Rng, I, I>(),
+                            concepts::model_of<concepts::ForwardRange, Rng>(),
+                            concepts::model_of<concepts::ErasableRange, Rng, I, I>(),
                             concepts::is_true(RemovableIf<I, C, P>())
                         ));
                 };
@@ -74,17 +74,17 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, C, P>())>
                 void operator()(Rng &&, C &&, P && = P{}) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
                         "The object on which action::remove_if operates must be a model of the "
-                        "ForwardIterable concept.");
+                        "ForwardRange concept.");
                     using I = range_iterator_t<Rng>;
-                    CONCEPT_ASSERT_MSG(EraseableIterable<Rng, I, I>(),
+                    CONCEPT_ASSERT_MSG(ErasableRange<Rng, I, I>(),
                         "The object on which action::remove_if operates must allow element "
                         "removal.");
-                    CONCEPT_ASSERT_MSG(Projectable<I, P>(),
+                    CONCEPT_ASSERT_MSG(IndirectCallable<P, I>(),
                         "The projection function must accept objects of the iterator's value type, "
-                        "reference type, and rvalue reference type.");
-                    CONCEPT_ASSERT_MSG(IndirectInvokablePredicate<C, Project<I, P>>(),
+                        "reference type, and common reference type.");
+                    CONCEPT_ASSERT_MSG(IndirectCallablePredicate<C, Projected<I, P>>(),
                         "The predicate passed to action::remove_if must accept objects returned "
                         "by the projection function, or of the range's value type if no projection "
                         "is specified.");

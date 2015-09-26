@@ -21,11 +21,12 @@
 #include <range/v3/distance.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/static_const.hpp>
+#include <range/v3/utility/tagged_pair.hpp>
+#include <range/v3/algorithm/tagspec.hpp>
 
 namespace ranges
 {
@@ -39,17 +40,16 @@ namespace ranges
                 CONCEPT_REQUIRES_(
                     WeakInputIterator<I>() &&
                     WeaklyIncrementable<O>() &&
-                    IndirectlyCopyable<I, O, P>()
+                    IndirectlyCopyable<I, O>()
                 )>
-            std::pair<I, O>
-            operator()(I begin, iterator_difference_t<I> n, O out, P proj_ = P{}) const
+            tagged_pair<tag::in(I), tag::out(O)>
+            operator()(I begin, iterator_difference_t<I> n, O out) const
             {
                 RANGES_ASSERT(0 <= n);
-                auto &&proj = invokable(proj_);
                 auto norig = n;
                 auto b = uncounted(begin);
                 for(; n != 0; ++b, ++out, --n)
-                    *out = proj(*b);
+                    *out = *b;
                 return {recounted(begin, b, norig), out};
             }
         };
@@ -58,7 +58,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& copy_n = static_const<copy_n_fn>::value;
+            constexpr auto&& copy_n = static_const<with_braced_init_args<copy_n_fn>>::value;
         }
 
         /// @}

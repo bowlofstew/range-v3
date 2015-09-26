@@ -13,6 +13,7 @@
 #ifndef RANGES_V3_ALGORITHM_REMOVE_COPY_IF_HPP
 #define RANGES_V3_ALGORITHM_REMOVE_COPY_IF_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -20,8 +21,9 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/static_const.hpp>
+#include <range/v3/utility/tagged_pair.hpp>
+#include <range/v3/algorithm/tagspec.hpp>
 
 namespace ranges
 {
@@ -32,8 +34,8 @@ namespace ranges
         using RemoveCopyableIf = meta::fast_and<
             InputIterator<I>,
             WeaklyIncrementable<O>,
-            IndirectInvokablePredicate<C, Project<I, P>>,
-            IndirectlyCopyable<I, O, P>>;
+            IndirectCallablePredicate<C, Projected<I, P>>,
+            IndirectlyCopyable<I, O>>;
 
         /// \addtogroup group-algorithms
         /// @{
@@ -41,17 +43,16 @@ namespace ranges
         {
             template<typename I, typename S, typename O, typename C, typename P = ident,
                 CONCEPT_REQUIRES_(RemoveCopyableIf<I, O, C, P>() && IteratorRange<I, S>())>
-            std::pair<I, O> operator()(I begin, S end, O out, C pred_, P proj_ = P{}) const
+            tagged_pair<tag::in(I), tag::out(O)> operator()(I begin, S end, O out, C pred_, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 for(; begin != end; ++begin)
                 {
                     auto &&x = *begin;
-                    auto &&v = proj((decltype(x) &&) x);
-                    if(!(pred(v)))
+                    if(!(pred(proj(x))))
                     {
-                        *out = (decltype(v) &&) v;
+                        *out = (decltype(x) &&) x;
                         ++out;
                     }
                 }
@@ -60,8 +61,8 @@ namespace ranges
 
             template<typename Rng, typename O, typename C, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(RemoveCopyableIf<I, O, C, P>() && InputIterable<Rng &>())>
-            std::pair<I, O> operator()(Rng &rng, O out, C pred, P proj = P{}) const
+                CONCEPT_REQUIRES_(RemoveCopyableIf<I, O, C, P>() && InputRange<Rng>())>
+            tagged_pair<tag::in(range_safe_iterator_t<Rng>), tag::out(O)> operator()(Rng &&rng, O out, C pred, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(out), std::move(pred), std::move(proj));
             }
@@ -71,7 +72,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& remove_copy_if = static_const<remove_copy_if_fn>::value;
+            constexpr auto&& remove_copy_if = static_const<with_braced_init_args<remove_copy_if_fn>>::value;
         }
 
         /// @}

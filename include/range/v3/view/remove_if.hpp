@@ -16,16 +16,15 @@
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
-#include <range/v3/range_adaptor.hpp>
+#include <range/v3/view_adaptor.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/meta.hpp>
-#include <range/v3/utility/pipeable.hpp>
 #include <range/v3/utility/optional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
+#include <range/v3/utility/semiregular.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/algorithm/find_if_not.hpp>
 #include <range/v3/view/view.hpp>
@@ -38,11 +37,14 @@ namespace ranges
         /// @{
         template<typename Rng, typename Pred>
         struct remove_if_view
-          : range_adaptor<remove_if_view<Rng, Pred>, Rng>
+          : view_adaptor<
+                remove_if_view<Rng, Pred>,
+                Rng,
+                is_finite<Rng>::value ? finite : range_cardinality<Rng>::value>
         {
         private:
             friend range_access;
-            semiregular_invokable_t<Pred> pred_;
+            semiregular_t<function_type<Pred>> pred_;
             optional<range_iterator_t<Rng>> begin_;
 
             struct adaptor
@@ -50,7 +52,6 @@ namespace ranges
             {
             private:
                 remove_if_view *rng_;
-                using adaptor_base::advance;
                 void satisfy(range_iterator_t<Rng> &it) const
                 {
                     it = find_if_not(std::move(it), ranges::end(rng_->mutable_base()),
@@ -75,12 +76,13 @@ namespace ranges
                 {
                     this->satisfy(++it);
                 }
-                CONCEPT_REQUIRES(BidirectionalIterable<Rng>())
+                CONCEPT_REQUIRES(BidirectionalRange<Rng>())
                 void prev(range_iterator_t<Rng> &it) const
                 {
                     auto &&pred = rng_->pred_;
                     do --it; while(pred(*it));
                 }
+                void advance() = delete;
             };
             adaptor begin_adaptor()
             {
@@ -95,30 +97,30 @@ namespace ranges
         public:
             remove_if_view() = default;
             remove_if_view(remove_if_view &&that)
-              : range_adaptor_t<remove_if_view>(std::move(that))
+              : view_adaptor_t<remove_if_view>(std::move(that))
               , pred_(std::move(that).pred_)
               , begin_{}
             {}
             remove_if_view(remove_if_view const &that)
-              : range_adaptor_t<remove_if_view>(that)
+              : view_adaptor_t<remove_if_view>(that)
               , pred_(that.pred_)
               , begin_{}
             {}
-            remove_if_view(Rng && rng, Pred pred)
-              : range_adaptor_t<remove_if_view>{std::forward<Rng>(rng)}
-              , pred_(invokable(std::move(pred)))
+            remove_if_view(Rng rng, Pred pred)
+              : view_adaptor_t<remove_if_view>{std::move(rng)}
+              , pred_(as_function(std::move(pred)))
               , begin_{}
             {}
             remove_if_view& operator=(remove_if_view &&that)
             {
-                this->range_adaptor_t<remove_if_view>::operator=(std::move(that));
+                this->view_adaptor_t<remove_if_view>::operator=(std::move(that));
                 pred_ = std::move(that).pred_;
                 begin_.reset();
                 return *this;
             }
             remove_if_view& operator=(remove_if_view const &that)
             {
-                this->range_adaptor_t<remove_if_view>::operator=(that);
+                this->view_adaptor_t<remove_if_view>::operator=(that);
                 pred_ = that.pred_;
                 begin_.reset();
                 return *this;
@@ -140,25 +142,25 @@ namespace ranges
             public:
                 template<typename Rng, typename Pred>
                 using Concept = meta::and_<
-                    InputIterable<Rng>,
-                    IndirectInvokablePredicate<Pred, range_iterator_t<Rng>>>;
+                    InputRange<Rng>,
+                    IndirectCallablePredicate<Pred, range_iterator_t<Rng>>>;
 
                 template<typename Rng, typename Pred,
                     CONCEPT_REQUIRES_(Concept<Rng, Pred>())>
-                remove_if_view<Rng, Pred>
+                remove_if_view<all_t<Rng>, Pred>
                 operator()(Rng && rng, Pred pred) const
                 {
-                    return {std::forward<Rng>(rng), std::move(pred)};
+                    return {all(std::forward<Rng>(rng)), std::move(pred)};
                 }
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Rng, typename Pred,
                     CONCEPT_REQUIRES_(!Concept<Rng, Pred>())>
                 void operator()(Rng &&, Pred) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
                         "The first argument to view::remove_if must be a model of the "
-                        "InputIterable concept");
-                    CONCEPT_ASSERT_MSG(IndirectInvokablePredicate<Pred, range_iterator_t<Rng>>(),
+                        "InputRange concept");
+                    CONCEPT_ASSERT_MSG(IndirectCallablePredicate<Pred, range_iterator_t<Rng>>(),
                         "The second argument to view::remove_if must be callable with "
                         "a value of the range, and the return type must be convertible "
                         "to bool");

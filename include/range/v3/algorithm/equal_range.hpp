@@ -19,7 +19,6 @@
 #include <range/v3/range_concepts.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/algorithm/aux_/equal_range_n.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -43,9 +42,9 @@ namespace ranges
 
             template<typename Rng, typename V, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Iterable<Rng &>() && BinarySearchable<I, V, C, P>())>
-            range<I>
-            operator()(Rng & rng, V const & val, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(Range<Rng>() && BinarySearchable<I, V, C, P>())>
+            meta::if_<std::is_lvalue_reference<Rng>, range<I>, dangling<range<I>>>
+            operator()(Rng &&rng, V const & val, C pred = C{}, P proj = P{}) const
             {
                 static_assert(!is_infinite<Rng>::value, "Trying to binary search an infinite range");
                 return aux::equal_range_n(begin(rng), distance(rng), val, std::move(pred),
@@ -57,7 +56,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& equal_range = static_const<equal_range_fn>::value;
+            constexpr auto&& equal_range = static_const<with_braced_init_args<equal_range_fn>>::value;
         }
 
         /// @}

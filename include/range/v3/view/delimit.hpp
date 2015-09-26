@@ -14,15 +14,17 @@
 #ifndef RANGES_V3_VIEW_DELIMIT_HPP
 #define RANGES_V3_VIEW_DELIMIT_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_adaptor.hpp>
+#include <range/v3/view_adaptor.hpp>
 #include <range/v3/range.hpp>
 #include <range/v3/utility/unreachable.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/view.hpp>
+#include <range/v3/view/all.hpp>
 
 namespace ranges
 {
@@ -32,7 +34,7 @@ namespace ranges
         /// @{
         template<typename Rng, typename Val>
         struct delimit_view
-          : range_adaptor<delimit_view<Rng, Val>, Rng>
+          : view_adaptor<delimit_view<Rng, Val>, Rng, is_finite<Rng>::value ? finite : unknown>
         {
         private:
             friend range_access;
@@ -57,8 +59,8 @@ namespace ranges
             }
         public:
             delimit_view() = default;
-            delimit_view(Rng && rng, Val value)
-              : range_adaptor_t<delimit_view>{std::forward<Rng>(rng)}
+            delimit_view(Rng rng, Val value)
+              : view_adaptor_t<delimit_view>{std::move(rng)}
               , value_(std::move(value))
             {}
         };
@@ -78,15 +80,15 @@ namespace ranges
             public:
                 template<typename Rng, typename Val>
                 using Concept = meta::and_<
-                    Iterable<Rng>,
+                    Range<Rng>,
                     EqualityComparable<Val, range_common_reference_t<Rng>>>;
 
                 template<typename Rng, typename Val,
                     CONCEPT_REQUIRES_(Concept<Rng, Val>())>
-                delimit_view<Rng, Val>
+                delimit_view<all_t<Rng>, Val>
                 operator()(Rng && rng, Val value) const
                 {
-                    return {std::forward<Rng>(rng), std::move(value)};
+                    return {all(std::forward<Rng>(rng)), std::move(value)};
                 }
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Rng, typename Val,
@@ -94,8 +96,8 @@ namespace ranges
                 void
                 operator()(Rng &&, Val) const
                 {
-                    CONCEPT_ASSERT_MSG(Iterable<Rng>(),
-                        "Rng must model the Iterable concept");
+                    CONCEPT_ASSERT_MSG(Range<Rng>(),
+                        "Rng must model the Range concept");
                     CONCEPT_ASSERT_MSG(EqualityComparable<Val, range_common_reference_t<Rng>>(),
                         "The delimiting value type must be EqualityComparable to the "
                         "range's common reference type.");

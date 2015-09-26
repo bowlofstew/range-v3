@@ -31,7 +31,6 @@
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/swap.hpp>
 #include <range/v3/algorithm/min_element.hpp>
@@ -109,9 +108,9 @@ namespace ranges
                 CONCEPT_REQUIRES_(RandomAccessIterator<I>() && Sortable<I, C, P>())>
             I operator()(I begin, I nth, S end_, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
-                I end = next_to(nth, end_), end_orig = end;
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
+                I end = ranges::next(nth, end_), end_orig = end;
                 // C is known to be a reference type
                 using difference_type = iterator_difference_t<I>;
                 difference_type const limit = 7;
@@ -299,12 +298,14 @@ namespace ranges
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
                 CONCEPT_REQUIRES_(
-                    RandomAccessIterable<Rng &>() &&
+                    RandomAccessRange<Rng>() &&
                     Sortable<I, C, P>()
                 )>
-            I operator()(Rng &rng, I nth, C pred = C{}, P proj = P{}) const
+            range_safe_iterator_t<Rng>
+            operator()(Rng &&rng, I nth, C pred = C{}, P proj = P{}) const
             {
-                return (*this)(begin(rng), std::move(nth), end(rng), std::move(pred), std::move(proj));
+                return (*this)(begin(rng), std::move(nth), end(rng), std::move(pred),
+                    std::move(proj));
             }
         };
 
@@ -312,7 +313,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& nth_element = static_const<nth_element_fn>::value;
+            constexpr auto&& nth_element = static_const<with_braced_init_args<nth_element_fn>>::value;
         }
 
         /// @}

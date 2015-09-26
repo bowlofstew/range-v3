@@ -18,7 +18,6 @@
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -32,14 +31,12 @@ namespace ranges
         struct for_each_fn
         {
             template<typename I, typename S, typename F, typename P = ident,
-                typename V = iterator_common_reference_t<I>,
-                typename X = concepts::Invokable::result_t<P, V>,
                 CONCEPT_REQUIRES_(InputIterator<I>() && IteratorRange<I, S>() &&
-                    IndirectInvokable<F, Project<I, P>>())>
+                    IndirectCallable<F, Projected<I, P>>())>
             I operator()(I begin, S end, F fun_, P proj_ = P{}) const
             {
-                auto &&fun = invokable(fun_);
-                auto &&proj = invokable(proj_);
+                auto &&fun = as_function(fun_);
+                auto &&proj = as_function(proj_);
                 for(; begin != end; ++begin)
                 {
                     fun(proj(*begin));
@@ -49,8 +46,8 @@ namespace ranges
 
             template<typename Rng, typename F, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(InputIterable<Rng &>() && IndirectInvokable<F, Project<I, P>>())>
-            I operator()(Rng &rng, F fun, P proj = P{}) const
+                CONCEPT_REQUIRES_(InputRange<Rng>() && IndirectCallable<F, Projected<I, P>>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, F fun, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(fun), std::move(proj));
             }
@@ -60,7 +57,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& for_each = static_const<for_each_fn>::value;
+            constexpr auto&& for_each = static_const<with_braced_init_args<for_each_fn>>::value;
         }
 
         /// @}

@@ -17,10 +17,10 @@
 #ifndef RANGES_V3_NUMERIC_ADJACENT_DIFFERENCE_HPP
 #define RANGES_V3_NUMERIC_ADJACENT_DIFFERENCE_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
@@ -32,16 +32,16 @@ namespace ranges
     {
         template <typename I, typename O, typename BOp = minus, typename P = ident,
                   typename V = iterator_value_t<I>,
-                  typename X = concepts::Invokable::result_t<P, V>,
-                  typename Y = concepts::Invokable::result_t<BOp, X, X>>
+                  typename X = concepts::Callable::result_t<P, V>,
+                  typename Y = concepts::Callable::result_t<BOp, X, X>>
         using AdjacentDifferentiable = meta::fast_and<
             InputIterator<I>,
             WeakOutputIterator<O, X>,
             WeakOutputIterator<O, Y>,
-            Invokable<P, V>,
-            Invokable<BOp, X, X>,
-            CopyConstructible<X>,
-            MoveAssignable<X>>;
+            Callable<P, V>,
+            Callable<BOp, X, X>,
+            CopyConstructible<uncvref_t<X>>,
+            Movable<uncvref_t<X>>>;
 
         struct adjacent_difference_fn
         {
@@ -53,10 +53,10 @@ namespace ranges
             operator()(I begin, S end, O result, BOp bop_ = BOp{}, P proj_ = P{}) const
             {
                 // BUGBUG think about the use of coerce here.
-                auto &&bop = invokable(bop_);
-                auto &&proj = invokable(proj_);
+                auto &&bop = as_function(bop_);
+                auto &&proj = as_function(proj_);
                 using V = iterator_value_t<I>;
-                using X = concepts::Invokable::result_t<P, V>;
+                using X = concepts::Callable::result_t<P, V>;
                 coerce<V> v;
                 coerce<X> x;
 
@@ -82,10 +82,10 @@ namespace ranges
             operator()(I begin, S end, O result, S2 end_result, BOp bop_ = BOp{},
                        P proj_ = P{}) const
             {
-                auto &&bop = invokable(bop_);
-                auto &&proj = invokable(proj_);
+                auto &&bop = as_function(bop_);
+                auto &&proj = as_function(proj_);
                 using V = iterator_value_t<I>;
-                using X = concepts::Invokable::result_t<P, V>;
+                using X = concepts::Callable::result_t<P, V>;
                 coerce<V> v;
                 coerce<X> x;
 
@@ -106,7 +106,7 @@ namespace ranges
 
             template <typename Rng, typename ORef, typename BOp = minus, typename P = ident,
                       typename I = range_iterator_t<Rng>, typename O = uncvref_t<ORef>,
-                      CONCEPT_REQUIRES_(Iterable<Rng &>() &&
+                      CONCEPT_REQUIRES_(Range<Rng &>() &&
                                         AdjacentDifferentiable<I, O, BOp, P>())>
             std::pair<I, O>
             operator()(Rng &rng, ORef &&result, BOp bop = BOp{}, P proj = P{}) const
@@ -118,7 +118,7 @@ namespace ranges
             template <typename Rng, typename ORng, typename BOp = minus,
                       typename P = ident, typename I = range_iterator_t<Rng>,
                       typename O = range_iterator_t<ORng>,
-                      CONCEPT_REQUIRES_(Iterable<Rng &>() && Iterable<ORng &>() &&
+                      CONCEPT_REQUIRES_(Range<Rng &>() && Range<ORng &>() &&
                                         AdjacentDifferentiable<I, O, BOp, P>())>
             std::pair<I, O>
             operator()(Rng &rng, ORng &result, BOp bop = BOp{}, P proj = P{}) const

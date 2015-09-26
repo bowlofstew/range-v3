@@ -17,13 +17,13 @@
 #include <tuple>
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/size.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_facade.hpp>
-#include <range/v3/utility/meta.hpp>
+#include <range/v3/view_facade.hpp>
 #include <range/v3/utility/variant.hpp>
 #include <range/v3/utility/iterator.hpp>
 #include <range/v3/utility/functional.hpp>
@@ -48,6 +48,17 @@ namespace ranges
                     return *it;
                 }
             };
+
+            template<typename State, typename Value>
+            using concat_cardinality =
+                std::integral_constant<cardinality,
+                    State::value == infinite || Value::value == infinite ?
+                        infinite :
+                        State::value == unknown || Value::value == unknown ?
+                            unknown :
+                            State::value == finite || Value::value == finite ?
+                                finite :
+                                static_cast<cardinality>(State::value + Value::value)>;
         }
         /// \endcond
 
@@ -55,25 +66,33 @@ namespace ranges
         /// @{
         template<typename...Rngs>
         struct concat_view
-          : range_facade<concat_view<Rngs...>,
-                meta::or_c<is_infinite<Rngs>::value...>::value>
+          : view_facade<concat_view<Rngs...>,
+                meta::fold<
+                    meta::list<range_cardinality<Rngs>...>,
+                    std::integral_constant<cardinality, static_cast<cardinality>(0)>,
+                    meta::quote<detail::concat_cardinality>>::value>
         {
         private:
             friend range_access;
             using difference_type_ = common_type_t<range_difference_t<Rngs>...>;
-            using size_type_ = meta::eval<std::make_unsigned<difference_type_>>;
+            using size_type_ = meta::_t<std::make_unsigned<difference_type_>>;
             static constexpr std::size_t cranges{sizeof...(Rngs)};
-            std::tuple<view::all_t<Rngs>...> rngs_;
+            std::tuple<Rngs...> rngs_;
 
+            template<bool IsConst>
             struct sentinel;
 
+            template<bool IsConst>
             struct cursor
             {
                 using difference_type = common_type_t<range_difference_t<Rngs>...>;
             private:
-                friend struct sentinel;
-                concat_view const *rng_;
-                tagged_variant<range_iterator_t<view::all_t<Rngs> const>...> its_;
+                friend struct sentinel<IsConst>;
+                template<typename T>
+                using constify_if = meta::apply<meta::add_const_if_c<IsConst>, T>;
+                using concat_view_t = constify_if<concat_view>;
+                concat_view_t *rng_;
+                tagged_variant<range_iterator_t<constify_if<Rngs>>...> its_;
 
                 template<std::size_t N>
                 void satisfy(meta::size_t<N>)
@@ -113,7 +132,9 @@ namespace ranges
                     {
                         if(it == begin(std::get<N>(pos->rng_->rngs_)))
                         {
-                            ranges::set<N - 1>(pos->its_, end(std::get<N - 1>(pos->rng_->rngs_)));
+                            auto &&rng = std::get<N - 1>(pos->rng_->rngs_);
+                            ranges::set<N - 1>(pos->its_,
+                                ranges::next(ranges::begin(rng), ranges::end(rng)));
                             (*this)(ranges::get<N - 1>(pos->its_), meta::size_t<N - 1>{});
                         }
                         else
@@ -133,11 +154,11 @@ namespace ranges
                     void operator()(Iterator &it, meta::size_t<N> which) const
                     {
                         auto end = ranges::end(std::get<N>(pos->rng_->rngs_));
-                        // BUGBUG If distance(it, end) > n, then using advance_bounded
+                        // BUGBUG If distance(it, end) > n, then using bounded advance
                         // is O(n) when it need not be since the end iterator position
                         // is actually not interesting. Only the "rest" is needed, which
                         // can sometimes be O(1).
-                        auto rest = advance_bounded(it, n, std::move(end));
+                        auto rest = ranges::advance(it, n, std::move(end));
                         pos->satisfy(which);
                         if(rest != 0)
                             pos->its_.apply_i(advance_fwd_fun{pos, rest});
@@ -158,21 +179,22 @@ namespace ranges
                         auto begin = ranges::begin(std::get<N>(pos->rng_->rngs_));
                         if(it == begin)
                         {
-                            ranges::set<N - 1>(pos->its_, end(std::get<N - 1>(pos->rng_->rngs_)));
+                            auto &&rng = std::get<N - 1>(pos->rng_->rngs_);
+                            ranges::set<N - 1>(pos->its_,
+                                ranges::next(ranges::begin(rng), ranges::end(rng)));
                             (*this)(ranges::get<N - 1>(pos->its_), meta::size_t<N - 1>{});
                         }
                         else
                         {
-                            auto rest = advance_bounded(it, n, std::move(begin));
+                            auto rest = ranges::advance(it, n, std::move(begin));
                             if(rest != 0)
                                 pos->its_.apply_i(advance_rev_fun{pos, rest});
                         }
                     }
                 };
-                static difference_type distance_to_(meta::size_t<cranges>, cursor const &, cursor const &)
+                [[noreturn]] static difference_type distance_to_(meta::size_t<cranges>, cursor const &, cursor const &)
                 {
-                    RANGES_ASSERT(false);
-                    return 0;
+                    RANGES_ENSURE(false);
                 }
                 template<std::size_t N>
                 static difference_type distance_to_(meta::size_t<N>, cursor const &from, cursor const &to)
@@ -182,28 +204,27 @@ namespace ranges
                     if(from.its_.which() == N)
                     {
                         if(to.its_.which() == N)
-                            return std::distance(ranges::get<N>(from.its_), ranges::get<N>(to.its_));
-                        return std::distance(ranges::get<N>(from.its_), end(std::get<N>(from.rng_->rngs_))) +
+                            return distance(ranges::get<N>(from.its_), ranges::get<N>(to.its_));
+                        return distance(ranges::get<N>(from.its_), end(std::get<N>(from.rng_->rngs_))) +
                             cursor::distance_to_(meta::size_t<N + 1>{}, from, to);
                     }
                     if(from.its_.which() < N && to.its_.which() > N)
                         return distance(std::get<N>(from.rng_->rngs_)) +
                             cursor::distance_to_(meta::size_t<N + 1>{}, from, to);
                     RANGES_ASSERT(to.its_.which() == N);
-                    return std::distance(begin(std::get<N>(from.rng_->rngs_)), ranges::get<N>(to.its_));
+                    return distance(begin(std::get<N>(from.rng_->rngs_)), ranges::get<N>(to.its_));
                 }
             public:
-                //using reference = detail::real_common_type_t<range_reference_t<Rngs const>...>;
                 // BUGBUG what about rvalue_reference and common_reference?
-                using reference = common_reference_t<range_reference_t<Rngs const>...>;
+                using reference = common_reference_t<range_reference_t<constify_if<Rngs>>...>;
                 using single_pass = meta::fast_or<SinglePass<range_iterator_t<Rngs>>...>;
                 cursor() = default;
-                cursor(concat_view const &rng, begin_tag)
+                cursor(concat_view_t &rng, begin_tag)
                   : rng_(&rng), its_{meta::size_t<0>{}, begin(std::get<0>(rng.rngs_))}
                 {
                     this->satisfy(meta::size_t<0>{});
                 }
-                cursor(concat_view const &rng, end_tag)
+                cursor(concat_view_t &rng, end_tag)
                   : rng_(&rng), its_{meta::size_t<cranges-1>{}, end(std::get<cranges-1>(rng.rngs_))}
                 {}
                 reference current() const
@@ -219,12 +240,12 @@ namespace ranges
                 {
                     return its_ == pos.its_;
                 }
-                CONCEPT_REQUIRES(meta::and_c<(bool)BidirectionalIterable<Rngs>()...>::value)
+                CONCEPT_REQUIRES(meta::and_c<(bool)BidirectionalRange<Rngs>()...>::value)
                 void prev()
                 {
                     its_.apply_i(prev_fun{this});
                 }
-                CONCEPT_REQUIRES(meta::and_c<(bool)RandomAccessIterable<Rngs>()...>::value)
+                CONCEPT_REQUIRES(meta::and_c<(bool)RandomAccessRange<Rngs>()...>::value)
                 void advance(difference_type n)
                 {
                     if(n > 0)
@@ -232,7 +253,7 @@ namespace ranges
                     else if(n < 0)
                         its_.apply_i(advance_rev_fun{this, n});
                 }
-                CONCEPT_REQUIRES(meta::and_c<(bool) RandomAccessIterable<Rngs>()...>::value)
+                CONCEPT_REQUIRES(meta::and_c<(bool) RandomAccessRange<Rngs>()...>::value)
                 difference_type distance_to(cursor const &that) const
                 {
                     if(its_.which() <= that.its_.which())
@@ -240,39 +261,56 @@ namespace ranges
                     return -cursor::distance_to_(meta::size_t<0>{}, that, *this);
                 }
             };
+            template<bool IsConst>
             struct sentinel
             {
             private:
-                range_sentinel_t<meta::back<meta::list<view::all_t<Rngs>...>> const> end_;
+                template<typename T>
+                using constify_if = meta::apply<meta::add_const_if_c<IsConst>, T>;
+                using concat_view_t = constify_if<concat_view>;
+                range_sentinel_t<constify_if<meta::back<meta::list<Rngs...>>>> end_;
             public:
                 sentinel() = default;
-                sentinel(concat_view const &rng, end_tag)
+                sentinel(concat_view_t &rng, end_tag)
                   : end_(end(std::get<cranges - 1>(rng.rngs_)))
                 {}
-                bool equal(cursor const &pos) const
+                bool equal(cursor<IsConst> const &pos) const
                 {
                     return pos.its_.which() == cranges - 1 &&
                         ranges::get<cranges - 1>(pos.its_) == end_;
                 }
             };
-            cursor begin_cursor() const
+            cursor<false> begin_cursor()
             {
                 return {*this, begin_tag{}};
             }
-            meta::if_<meta::and_c<(bool)BoundedIterable<Rngs>()...>, cursor, sentinel>
+            meta::if_<meta::and_c<(bool)BoundedRange<Rngs>()...>, cursor<false>, sentinel<false>>
+            end_cursor()
+            {
+                return {*this, end_tag{}};
+            }
+            CONCEPT_REQUIRES(meta::and_c<(bool)Range<Rngs const>()...>())
+            cursor<true> begin_cursor() const
+            {
+                return {*this, begin_tag{}};
+            }
+            CONCEPT_REQUIRES(meta::and_c<(bool)Range<Rngs const>()...>())
+            meta::if_<meta::and_c<(bool)BoundedRange<Rngs>()...>, cursor<true>, sentinel<true>>
             end_cursor() const
             {
                 return {*this, end_tag{}};
             }
         public:
             concat_view() = default;
-            explicit concat_view(Rngs &&...rngs)
-              : rngs_(view::all(std::forward<Rngs>(rngs))...)
+            explicit concat_view(Rngs...rngs)
+              : rngs_{std::move(rngs)...}
             {}
-            CONCEPT_REQUIRES(meta::and_c<(bool)SizedIterable<Rngs>()...>::value)
-            size_type_ size() const
+            CONCEPT_REQUIRES(meta::and_c<(bool)SizedRange<Rngs>()...>::value)
+            constexpr size_type_ size() const
             {
-                return tuple_foldl(tuple_transform(rngs_, ranges::size), size_type_{0}, plus{});
+                return range_cardinality<concat_view>::value >= 0 ?
+                    (size_type_)range_cardinality<concat_view>::value :
+                    tuple_foldl(tuple_transform(rngs_, ranges::size), size_type_{0}, plus{});
             }
         };
 
@@ -281,11 +319,11 @@ namespace ranges
             struct concat_fn
             {
                 template<typename...Rngs>
-                concat_view<Rngs...> operator()(Rngs &&... rngs) const
+                concat_view<all_t<Rngs>...> operator()(Rngs &&... rngs) const
                 {
-                    static_assert(meta::and_c<(bool)InputIterable<Rngs>()...>::value,
-                        "Expecting Input Iterables");
-                    return concat_view<Rngs...>{std::forward<Rngs>(rngs)...};
+                    static_assert(meta::and_c<(bool)InputRange<Rngs>()...>::value,
+                        "Expecting Input Ranges");
+                    return concat_view<all_t<Rngs>...>{all(std::forward<Rngs>(rngs))...};
                 }
             };
 

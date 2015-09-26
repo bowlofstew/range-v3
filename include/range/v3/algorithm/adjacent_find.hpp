@@ -17,7 +17,6 @@
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -34,16 +33,16 @@ namespace ranges
             ///
             /// range-based version of the \c adjacent_find std algorithm
             ///
-            /// \pre `Rng` is a model of the `Iterable` concept
+            /// \pre `Rng` is a model of the `Range` concept
             /// \pre `C` is a model of the `BinaryPredicate` concept
             template<typename I, typename S, typename C = equal_to, typename P = ident,
                 CONCEPT_REQUIRES_(ForwardIterator<I>() && IteratorRange<I, S>() &&
-                    IndirectInvokableRelation<C, Project<I, P>>())>
+                    IndirectCallableRelation<C, Projected<I, P>>())>
             I
             operator()(I begin, S end, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 if(begin == end)
                     return begin;
                 auto next = begin;
@@ -56,10 +55,10 @@ namespace ranges
             /// \overload
             template<typename Rng, typename C = equal_to, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(ForwardIterable<Rng &>() &&
-                    IndirectInvokableRelation<C, Project<I, P>>())>
-            I
-            operator()(Rng &rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(ForwardRange<Rng>() &&
+                    IndirectCallableRelation<C, Projected<I, P>>())>
+            range_safe_iterator_t<Rng>
+            operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -69,7 +68,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& adjacent_find = static_const<adjacent_find_fn>::value;
+            constexpr auto&& adjacent_find = static_const<with_braced_init_args<adjacent_find_fn>>::value;
         }
 
         /// @}

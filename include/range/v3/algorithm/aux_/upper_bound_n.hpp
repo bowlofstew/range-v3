@@ -34,15 +34,15 @@ namespace ranges
                 ///
                 /// range-based version of the `upper_bound` std algorithm
                 ///
-                /// \pre `Rng` is a model of the `Iterable` concept
+                /// \pre `Rng` is a model of the `Range` concept
                 template<typename I, typename V2, typename C = ordered_less, typename P = ident,
                     CONCEPT_REQUIRES_(BinarySearchable<I, V2, C, P>())>
                 I operator()(I begin, iterator_difference_t<I> d, V2 const &val, C pred_ = C{},
                     P proj_ = P{}) const
                 {
                     RANGES_ASSERT(0 <= d);
-                    auto &&pred = invokable(pred_);
-                    auto &&proj = invokable(proj_);
+                    auto &&pred = as_function(pred_);
+                    auto &&proj = as_function(proj_);
                     while(0 != d)
                     {
                         auto half = d / 2;

@@ -13,6 +13,7 @@
 #ifndef RANGES_V3_ALGORITHM_REMOVE_HPP
 #define RANGES_V3_ALGORITHM_REMOVE_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -21,7 +22,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/algorithm/find.hpp>
 #include <range/v3/utility/static_const.hpp>
 
@@ -33,7 +33,7 @@ namespace ranges
         template<typename I, typename T, typename P = ident>
         using Removable = meta::fast_and<
             ForwardIterator<I>,
-            IndirectInvokableRelation<equal_to, Project<I, P>, T const *>,
+            IndirectCallableRelation<equal_to, Projected<I, P>, T const *>,
             Permutable<I>>;
 
         /// \addtogroup group-algorithms
@@ -44,7 +44,7 @@ namespace ranges
                 CONCEPT_REQUIRES_(Removable<I, T, P>() && IteratorRange<I, S>())>
             I operator()(I begin, S end, T const &val, P proj_ = P{}) const
             {
-                auto &&proj = invokable(proj_);
+                auto &&proj = as_function(proj_);
                 begin = find(std::move(begin), end, val, std::ref(proj));
                 if(begin != end)
                 {
@@ -62,8 +62,8 @@ namespace ranges
 
             template<typename Rng, typename T, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Removable<I, T, P>() && ForwardIterable<Rng &>())>
-            I operator()(Rng &rng, T const &val, P proj = P{}) const
+                CONCEPT_REQUIRES_(Removable<I, T, P>() && ForwardRange<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, T const &val, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), val, std::move(proj));
             }
@@ -73,7 +73,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& remove = static_const<remove_fn>::value;
+            constexpr auto&& remove = static_const<with_braced_init_args<remove_fn>>::value;
         }
 
         /// @}

@@ -20,11 +20,12 @@
 #include <range/v3/size.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
-#include <range/v3/range_adaptor.hpp>
+#include <range/v3/view_adaptor.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/view/view.hpp>
+#include <range/v3/view/all.hpp>
 
 namespace ranges
 {
@@ -34,17 +35,18 @@ namespace ranges
         /// @{
         template<typename Rng>
         struct move_view
-          : range_adaptor<move_view<Rng>, Rng>
+          : view_adaptor<move_view<Rng>, Rng>
         {
         private:
             friend range_access;
             struct adaptor : adaptor_base
             {
-            private:
-                using adaptor_base::prev;
-            public:
-                using single_pass = std::true_type;
+                using value_type = range_value_t<Rng>;
                 range_rvalue_reference_t<Rng> current(range_iterator_t<Rng> it) const
+                {
+                    return iter_move(it);
+                }
+                range_rvalue_reference_t<Rng> indirect_move(range_iterator_t<Rng> it) const
                 {
                     return iter_move(it);
                 }
@@ -59,10 +61,10 @@ namespace ranges
             }
         public:
             move_view() = default;
-            move_view(Rng &&rng)
-              : range_adaptor_t<move_view>{std::forward<Rng>(rng)}
+            explicit move_view(Rng rng)
+              : view_adaptor_t<move_view>{std::move(rng)}
             {}
-            CONCEPT_REQUIRES(SizedIterable<Rng>())
+            CONCEPT_REQUIRES(SizedRange<Rng>())
             range_size_t<Rng> size() const
             {
                 return ranges::size(this->base());
@@ -74,18 +76,18 @@ namespace ranges
             struct move_fn
             {
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(InputIterable<Rng>())>
-                move_view<Rng> operator()(Rng && rng) const
+                    CONCEPT_REQUIRES_(InputRange<Rng>())>
+                move_view<all_t<Rng>> operator()(Rng && rng) const
                 {
-                    return move_view<Rng>{std::forward<Rng>(rng)};
+                    return move_view<all_t<Rng>>{all(std::forward<Rng>(rng))};
                 }
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!InputIterable<Rng>())>
+                    CONCEPT_REQUIRES_(!InputRange<Rng>())>
                 void operator()(Rng &&) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
-                        "The argument passed to view::move must be a model of the InputIterable "
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
+                        "The argument passed to view::move must be a model of the InputRange "
                         "concept.");
                 }
             #endif

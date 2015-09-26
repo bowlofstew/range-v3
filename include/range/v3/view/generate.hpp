@@ -16,14 +16,14 @@
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/size.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_traits.hpp>
-#include <range/v3/range_facade.hpp>
-#include <range/v3/utility/meta.hpp>
-#include <range/v3/utility/invokable.hpp>
-#include <range/v3/utility/optional.hpp>
+#include <range/v3/view_facade.hpp>
+#include <range/v3/utility/functional.hpp>
+#include <range/v3/utility/semiregular.hpp>
 #include <range/v3/utility/static_const.hpp>
 
 namespace ranges
@@ -34,51 +34,53 @@ namespace ranges
         /// @{
         template<typename G>
         struct generate_view
-          : range_facade<generate_view<G>, true>
+          : view_facade<generate_view<G>, infinite>
         {
         private:
             friend struct range_access;
-            optional<G> gen_;
-            template<bool IsConst>
+            using result_t = concepts::Function::result_t<G>;
+            semiregular_t<G> gen_;
+            semiregular_t<result_t> val_;
             struct cursor
             {
             private:
-                using gen_t = meta::apply<meta::add_const_if_c<IsConst>, G>;
-                gen_t *gen_;
+                generate_view *view_;
             public:
                 using single_pass = std::true_type;
                 cursor() = default;
-                cursor(gen_t &g)
-                  : gen_(&g)
+                cursor(generate_view &view)
+                  : view_(&view)
                 {}
                 constexpr bool done() const
                 {
                     return false;
                 }
-                auto current() const -> decltype((*gen_)())
+                result_t current() const
                 {
-                    return (*gen_)();
+                    return view_->val_;
                 }
-                void next() const
-                {}
+                void next()
+                {
+                    view_->next();
+                }
             };
-            CONCEPT_REQUIRES(!Function<G const>())
-            cursor<false> begin_cursor()
+            void next()
             {
-                RANGES_ASSERT(!!gen_);
-                return {*gen_};
+                val_ = gen_();
             }
-            CONCEPT_REQUIRES(Function<G const>())
-            cursor<true> begin_cursor() const
+            cursor begin_cursor()
             {
-                RANGES_ASSERT(!!gen_);
-                return {*gen_};
+                return {*this};
             }
         public:
             generate_view() = default;
             explicit generate_view(G g)
-              : gen_(std::move(g))
+              : gen_(std::move(g)), val_(gen_())
             {}
+            result_t & cached()
+            {
+                return val_;
+            }
         };
 
         namespace view

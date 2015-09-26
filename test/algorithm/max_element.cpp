@@ -20,12 +20,15 @@
 
 #include <memory>
 #include <numeric>
+#include <random>
 #include <algorithm>
 #include <range/v3/core.hpp>
 #include <range/v3/algorithm/max_element.hpp>
 #include "../simple_test.hpp"
 #include "../test_utils.hpp"
 #include "../test_iterators.hpp"
+
+namespace { std::mt19937 gen; }
 
 template <class Iter, class Sent = Iter>
 void
@@ -49,6 +52,15 @@ test_iter(Iter first, Sent last)
     }
     else
         CHECK(i == last);
+
+    auto j = ranges::max_element(std::move(rng));
+    if (first != last)
+    {
+        for (Iter k = first; k != last; ++k)
+            CHECK(!(*j.get_unsafe() < *k));
+    }
+    else
+        CHECK(j.get_unsafe() == last);
 }
 
 template <class Iter, class Sent = Iter>
@@ -57,7 +69,7 @@ test_iter(unsigned N)
 {
     std::unique_ptr<int[]> a{new int[N]};
     std::iota(a.get(), a.get()+N, 0);
-    std::random_shuffle(a.get(), a.get()+N);
+    std::shuffle(a.get(), a.get()+N, gen);
     test_iter(Iter(a.get()), Sent(a.get()+N));
 }
 
@@ -95,6 +107,15 @@ test_iter_comp(Iter first, Sent last)
     }
     else
         CHECK(i == last);
+
+    auto res = ranges::max_element(std::move(rng), std::greater<int>());
+    if (first != last)
+    {
+        for (Iter j = first; j != last; ++j)
+            CHECK(!std::greater<int>()(*res.get_unsafe(), *j));
+    }
+    else
+        CHECK(res.get_unsafe() == last);
 }
 
 template <class Iter, class Sent = Iter>
@@ -103,7 +124,7 @@ test_iter_comp(unsigned N)
 {
     std::unique_ptr<int[]> a{new int[N]};
     std::iota(a.get(), a.get()+N, 0);
-    std::random_shuffle(a.get(), a.get()+N);
+    std::shuffle(a.get(), a.get()+N, gen);
     test_iter_comp(Iter(a.get()), Sent(a.get()+N));
 }
 

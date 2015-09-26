@@ -19,11 +19,11 @@
 
 template<typename BidiRange>
 struct my_reverse_view
-  : ranges::range_adaptor<my_reverse_view<BidiRange>, BidiRange>
+  : ranges::view_adaptor<my_reverse_view<BidiRange>, BidiRange>
 {
 private:
-    CONCEPT_ASSERT(ranges::BidirectionalIterable<BidiRange>());
-    CONCEPT_ASSERT(ranges::BoundedIterable<BidiRange>());
+    CONCEPT_ASSERT(ranges::BidirectionalRange<BidiRange>());
+    CONCEPT_ASSERT(ranges::BoundedRange<BidiRange>());
     friend ranges::range_access;
     using base_iterator_t = ranges::range_iterator_t<BidiRange>;
 
@@ -50,12 +50,12 @@ private:
         {
             return *ranges::prev(it);
         }
-        CONCEPT_REQUIRES(ranges::RandomAccessIterable<BidiRange>())
+        CONCEPT_REQUIRES(ranges::RandomAccessRange<BidiRange>())
         void advance(base_iterator_t &it, ranges::range_difference_t<BidiRange> n)
         {
             it -= n;
         }
-        CONCEPT_REQUIRES(ranges::RandomAccessIterable<BidiRange>())
+        CONCEPT_REQUIRES(ranges::RandomAccessRange<BidiRange>())
         ranges::range_difference_t<BidiRange>
         distance_to(base_iterator_t const &here, base_iterator_t const &there)
         {
@@ -71,15 +71,15 @@ private:
         return {};
     }
 public:
-    using ranges::range_adaptor_t<my_reverse_view>::range_adaptor_t;
+    using ranges::view_adaptor_t<my_reverse_view>::view_adaptor_t;
 };
 
 struct my_delimited_range
-  : ranges::range_adaptor<
+  : ranges::view_adaptor<
         my_delimited_range,
         ranges::delimit_view<ranges::istream_range<int>, int>>
 {
-    using range_adaptor_t::range_adaptor_t;
+    using view_adaptor_t::view_adaptor_t;
 };
 
 int main()
@@ -87,21 +87,21 @@ int main()
     using namespace ranges;
     std::vector<int> v{1, 2, 3, 4};
     my_reverse_view<std::vector<int>& > retro{v};
-    ::models<concepts::BoundedRange>(retro);
+    ::models<concepts::BoundedView>(retro);
     ::models<concepts::RandomAccessIterator>(retro.begin());
     ::check_equal(retro, {4, 3, 2, 1});
 
     std::list<int> l{1, 2, 3, 4};
     my_reverse_view<std::list<int>& > retro2{l};
-    ::models<concepts::BoundedRange>(retro2);
+    ::models<concepts::BoundedView>(retro2);
     ::models<concepts::BidirectionalIterator>(retro2.begin());
     ::models_not<concepts::RandomAccessIterator>(retro2.begin());
     ::check_equal(retro2, {4, 3, 2, 1});
 
     std::stringstream sinx("1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9 1 2 3 4 42 6 7 8 9 ");
     my_delimited_range r{view::delimit(istream<int>(sinx), 42)};
-    ::models<concepts::Range>(r);
-    ::models_not<concepts::BoundedRange>(r);
+    ::models<concepts::View>(r);
+    ::models_not<concepts::BoundedView>(r);
     ::models<concepts::InputIterator>(r.begin());
     ::models_not<concepts::ForwardIterator>(r.begin());
     ::check_equal(r, {1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4});

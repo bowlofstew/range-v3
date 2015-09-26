@@ -16,8 +16,8 @@
 
 #include <utility>
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
-#include <range/v3/utility/meta.hpp>
 #include <range/v3/utility/static_const.hpp>
 #include <range/v3/utility/associated_types.hpp>
 
@@ -28,10 +28,10 @@ namespace ranges
         namespace aux
         {
             /// \ingroup group-utility
-            struct move_fn
+            struct move_fn : move_tag
             {
                 template<typename T,
-                    typename U = meta::eval<std::remove_reference<T>>>
+                    typename U = meta::_t<std::remove_reference<T>>>
                 U && operator()(T && t) const noexcept
                 {
                     return static_cast<U &&>(t);
@@ -48,10 +48,19 @@ namespace ranges
             /// \ingroup group-utility
             /// \sa `move_fn`
             template<typename T>
-            meta::eval<std::remove_reference<T>> && operator|(T && t, move_fn move) noexcept
+            meta::_t<std::remove_reference<T>> && operator|(T && t, move_fn move) noexcept
             {
                 return move(t);
             }
+
+            /// \ingroup group-utility
+            /// \sa `move_fn`
+            template<typename R>
+            using move_t =
+                meta::if_<
+                    std::is_reference<R>,
+                    meta::_t<std::remove_reference<R>> &&,
+                    detail::decay_t<R>>;
         }
 
         /// \cond
@@ -60,21 +69,12 @@ namespace ranges
             // Default indirect_move overload.
             template<typename I,
                 typename R = decltype(*std::declval<I>()),
-                typename U = meta::eval<std::remove_reference<R>>>
-            meta::if_<std::is_reference<R>, U &&, detail::decay_t<U>>
-            indirect_move(I const &, meta::id_t<R> && ref)
+                typename U = meta::_t<std::remove_reference<R>>>
+            aux::move_t<R> indirect_move(I const &i)
                 noexcept(std::is_reference<R>::value ||
                     std::is_nothrow_constructible<detail::decay_t<U>, U &&>::value)
             {
-                return aux::move(ref);
-            }
-
-            template<typename I>
-            auto indirect_move(I const &i)
-                noexcept(noexcept(indirect_move(i, *i))) ->
-                decltype(indirect_move(i, *i))
-            {
-                return indirect_move(i, *i);
+                return aux::move(*i);
             }
 
             struct indirect_move_fn
@@ -85,13 +85,6 @@ namespace ranges
                     decltype(indirect_move(i))
                 {
                     return indirect_move(i);
-                }
-                template<typename I>
-                auto operator()(I const &i, decltype(*i) && ref) const
-                    noexcept(noexcept(indirect_move(i, (decltype(*i) &&) ref))) ->
-                    decltype(indirect_move(i, (decltype(*i) &&) ref))
-                {
-                    return indirect_move(i, (decltype(*i) &&) ref);
                 }
             };
         }
@@ -108,7 +101,7 @@ namespace ranges
             template<typename I, typename O>
             meta::and_<
                 std::is_constructible<
-                    meta::eval<value_type<I>>,
+                    meta::_t<value_type<I>>,
                     decltype(indirect_move(std::declval<I>()))>,
                 std::is_assignable<
                     decltype(*std::declval<O>()),
@@ -122,7 +115,7 @@ namespace ranges
             template<typename I, typename O>
             meta::and_<
                 std::is_nothrow_constructible<
-                    meta::eval<value_type<I>>,
+                    meta::_t<value_type<I>>,
                     decltype(indirect_move(std::declval<I>()))>,
                 std::is_nothrow_assignable<
                     decltype(*std::declval<O>()),

@@ -14,129 +14,85 @@
 #ifndef RANGES_V3_VIEW_TAKE_HPP
 #define RANGES_V3_VIEW_TAKE_HPP
 
+#include <algorithm>
 #include <type_traits>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_interface.hpp>
-#include <range/v3/range.hpp>
-#include <range/v3/utility/meta.hpp>
-#include <range/v3/utility/iterator_traits.hpp>
-#include <range/v3/utility/counted_iterator.hpp>
+#include <range/v3/view_interface.hpp>
 #include <range/v3/utility/static_const.hpp>
-#include <range/v3/view/all.hpp>
-#include <range/v3/view/counted.hpp>
+#include <range/v3/utility/functional.hpp>
+#include <range/v3/view/take_exactly.hpp>
 #include <range/v3/view/view.hpp>
 
 namespace ranges
 {
     inline namespace v3
     {
-        /// \cond
-        namespace detail
-        {
-            template<typename Rng, bool IsRandomAccess = RandomAccessIterable<Rng>()>
-            struct take_view_
-              : range_facade<take_view<Rng>, false>
-            {
-            private:
-                friend range_access;
-                using base_range_t = view::all_t<Rng>;
-                using difference_type_ = range_difference_t<Rng>;
-                base_range_t rng_;
-                difference_type_ n_;
-
-                detail::counted_cursor<range_iterator_t<Rng>> begin_cursor()
-                {
-                    return {ranges::begin(rng_), n_};
-                }
-                CONCEPT_REQUIRES(Iterable<Rng const>())
-                detail::counted_cursor<range_iterator_t<Rng const>> begin_cursor() const
-                {
-                    return {ranges::begin(rng_), n_};
-                }
-                detail::counted_sentinel end_cursor() const
-                {
-                    return {};
-                }
-            public:
-                take_view_() = default;
-                take_view_(Rng && rng, difference_type_ n)
-                  : rng_(view::all(std::forward<Rng>(rng))), n_(n)
-                {
-                    RANGES_ASSERT(n >= 0);
-                }
-                range_size_t<Rng> size() const
-                {
-                    return static_cast<range_size_t<Rng>>(n_);
-                }
-                base_range_t & base()
-                {
-                    return rng_;
-                }
-                base_range_t const & base() const
-                {
-                    return rng_;
-                }
-            };
-
-            template<typename Rng>
-            struct take_view_<Rng, true>
-              : range_interface<take_view<Rng>>
-            {
-            private:
-                using base_range_t = view::all_t<Rng>;
-                using difference_type_ = range_difference_t<Rng>;
-                base_range_t rng_;
-                difference_type_ n_;
-            public:
-                take_view_() = default;
-                take_view_(Rng && rng, difference_type_ n)
-                  : rng_(view::all(std::forward<Rng>(rng))), n_(n)
-                {
-                    RANGES_ASSERT(n >= 0);
-                }
-                range_iterator_t<Rng> begin()
-                {
-                    return ranges::begin(rng_);
-                }
-                range_iterator_t<Rng> end()
-                {
-                    return next(ranges::begin(rng_), n_);
-                }
-                CONCEPT_REQUIRES(Iterable<Rng const>())
-                range_iterator_t<Rng const> begin() const
-                {
-                    return ranges::begin(rng_);
-                }
-                CONCEPT_REQUIRES(Iterable<Rng const>())
-                range_iterator_t<Rng const> end() const
-                {
-                    return next(ranges::begin(rng_), n_);
-                }
-                range_size_t<Rng> size() const
-                {
-                    return static_cast<range_size_t<Rng>>(n_);
-                }
-                base_range_t & base()
-                {
-                    return rng_;
-                }
-                base_range_t const & base() const
-                {
-                    return rng_;
-                }
-            };
-        }
-        /// \endcond
-
-        /// \addtogroup group-views
-        /// @{
         template<typename Rng>
         struct take_view
-          : detail::take_view_<Rng>
+          : view_facade<take_view<Rng>, finite>
         {
-            using detail::take_view_<Rng>::take_view_;
+        private:
+            friend range_access;
+            using difference_type_ = range_difference_t<Rng>;
+            Rng rng_;
+            difference_type_ n_;
+
+            template<bool IsConst>
+            struct sentinel
+            {
+            public:
+                using BaseRng = meta::apply<meta::add_const_if_c<IsConst>, Rng>;
+                using base_iterator = range_iterator_t<BaseRng>;
+                using base_sentinel = range_sentinel_t<BaseRng>;
+                base_sentinel sent_;
+            public:
+                sentinel() = default;
+                sentinel(base_sentinel sent)
+                  : sent_(sent)
+                {}
+                bool equal(detail::counted_cursor<base_iterator> const &that) const
+                {
+                    return 0 == that.count() || that.base() == sent_;
+                }
+            };
+
+            detail::counted_cursor<range_iterator_t<Rng>> begin_cursor()
+            {
+                return {ranges::begin(rng_), n_};
+            }
+            template<typename BaseRng = Rng,
+                CONCEPT_REQUIRES_(Range<BaseRng const>())>
+            detail::counted_cursor<range_iterator_t<BaseRng const>> begin_cursor() const
+            {
+                return {ranges::begin(rng_), n_};
+            }
+            sentinel<false> end_cursor()
+            {
+                return {ranges::end(rng_)};
+            }
+            template<typename BaseRng = Rng,
+                CONCEPT_REQUIRES_(Range<BaseRng const>())>
+            sentinel<true> end_cursor() const
+            {
+                return {ranges::end(rng_)};
+            }
+        public:
+            take_view() = default;
+            take_view(Rng rng, difference_type_ n)
+              : rng_(std::move(rng)), n_(n)
+            {
+                RANGES_ASSERT(n >= 0);
+            }
+            Rng & base()
+            {
+                return rng_;
+            }
+            Rng const & base() const
+            {
+                return rng_;
+            }
         };
 
         namespace view
@@ -146,25 +102,30 @@ namespace ranges
             private:
                 friend view_access;
 
-                template<typename Rng>
-                static take_view<Rng>
-                invoke_(Rng && rng, range_difference_t<Rng> to, concepts::InputIterable*)
+                template<typename Rng,
+                    CONCEPT_REQUIRES_(!SizedRange<Rng>() && !is_infinite<Rng>())>
+                static take_view<all_t<Rng>> invoke_(Rng && rng, range_difference_t<Rng> n)
                 {
-                    return {std::forward<Rng>(rng), to};
-                }
-                template<typename Rng, CONCEPT_REQUIRES_(!Range<Rng>() && std::is_lvalue_reference<Rng>())>
-                static range<range_iterator_t<Rng>>
-                invoke_(Rng && rng, range_difference_t<Rng> to, concepts::RandomAccessIterable*)
-                {
-                    return {begin(rng), next(begin(rng), to)};
+                    return {all(std::forward<Rng>(rng)), n};
                 }
 
-                template<typename Int, CONCEPT_REQUIRES_(Integral<Int>())>
-                static auto bind(take_fn take, Int to)
+                template<typename Rng,
+                    CONCEPT_REQUIRES_(SizedRange<Rng>() || is_infinite<Rng>())>
+                static auto invoke_(Rng && rng, range_difference_t<Rng> n)
                 RANGES_DECLTYPE_AUTO_RETURN
                 (
-                    make_pipeable(std::bind(take, std::placeholders::_1, to))
+                    take_exactly(
+                        std::forward<Rng>(rng),
+                        is_infinite<Rng>() ? n : std::min(n, distance(rng)))
                 )
+
+                template<typename Int, CONCEPT_REQUIRES_(Integral<Int>())>
+                static auto bind(take_fn take, Int n)
+                RANGES_DECLTYPE_AUTO_RETURN
+                (
+                    make_pipeable(std::bind(take, std::placeholders::_1, n))
+                )
+
             #ifndef RANGES_DOXYGEN_INVOKED
                 template<typename Int, CONCEPT_REQUIRES_(!Integral<Int>())>
                 static detail::null_pipe bind(take_fn, Int)
@@ -174,19 +135,21 @@ namespace ranges
                     return {};
                 }
             #endif
+
             public:
-                template<typename Rng, CONCEPT_REQUIRES_(InputIterable<Rng>())>
-                auto operator()(Rng && rng, range_difference_t<Rng> to) const
+                template<typename Rng, CONCEPT_REQUIRES_(InputRange<Rng>())>
+                auto operator()(Rng && rng, range_difference_t<Rng> n) const
                 RANGES_DECLTYPE_AUTO_RETURN
                 (
-                    take_fn::invoke_(std::forward<Rng>(rng), to, iterable_concept<Rng>{})
+                    take_fn::invoke_(std::forward<Rng>(rng), n)
                 )
+
             #ifndef RANGES_DOXYGEN_INVOKED
-                template<typename Rng, typename T, CONCEPT_REQUIRES_(!InputIterable<Rng>())>
+                template<typename Rng, typename T, CONCEPT_REQUIRES_(!InputRange<Rng>())>
                 void operator()(Rng &&, T &&) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<T>(),
-                        "The object on which view::take operates must be a model of the InputIterable "
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
+                        "The object on which view::take operates must be a model of the InputRange "
                         "concept.");
                     CONCEPT_ASSERT_MSG(Integral<T>(),
                         "The second argument to view::take must be a model of the Integral concept.");

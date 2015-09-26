@@ -22,23 +22,19 @@ int main()
     {
         int i = 0, j = 1;
         auto fib = view::generate_n([&]()->int{int tmp = i; i += j; std::swap(i, j); return tmp;}, 10);
-        CONCEPT_ASSERT(ranges::InputRange<decltype(fib)>());
+        CONCEPT_ASSERT(ranges::InputView<decltype(fib)>());
         check_equal(fib, {0,1,1,2,3,5,8,13,21,34});
-        auto const &cfib = fib;
-        auto it = fib.begin();
-        auto cit = cfib.begin();
-        CONCEPT_ASSERT(ranges::Same<decltype(it), decltype(cit)>());
     }
 
     // Test for mutable-only generator functions
     {
         int i = 0, j = 1;
         auto fib = view::generate_n([=]()mutable->int{int tmp = i; i += j; std::swap(i, j); return tmp;}, 10);
-        CONCEPT_ASSERT(ranges::InputRange<decltype(fib)>());
+        CONCEPT_ASSERT(ranges::InputView<decltype(fib)>());
         check_equal(fib, {0,1,1,2,3,5,8,13,21,34});
         // The generator cannot be called when it's const-qualified, so "fib const"
-        // does not model Range.
-        CONCEPT_ASSERT(!ranges::Range<decltype(fib) const>());
+        // does not model View.
+        CONCEPT_ASSERT(!ranges::View<decltype(fib) const>());
     }
 
     return test_result();

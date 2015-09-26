@@ -30,6 +30,8 @@ int main()
     auto res = ranges::copy(begin(a), end(a), out);
     CHECK(res.first == end(a));
     CHECK(res.second == out + size(out));
+    CHECK(&res.first == &res.in());
+    CHECK(&res.second == &res.out());
     CHECK(std::equal(a, a + size(a), out));
 
     std::fill_n(out, size(out), std::make_pair(0, 0));
@@ -42,33 +44,28 @@ int main()
 
     std::fill_n(out, size(out), std::make_pair(0, 0));
 
-    int out2[size(a)] = {};
-    int const expected[] = {0, 0, 1, 1, 3, 3};
-
-    auto res2 = ranges::copy(begin(a), end(a), out2, &std::pair<int,int>::first);
-    CHECK(res2.first == end(a));
-    CHECK(res2.second == out2 + size(out2));
-    CHECK(std::equal(begin(expected), end(expected), out2));
-
-    std::fill_n(out2, size(out2), 0);
-    CHECK(!std::equal(begin(expected), end(expected), out2));
-
-    res2 = ranges::copy(a, out2, &std::pair<int, int>::first);
-    CHECK(res2.first == a + size(a));
-    CHECK(res2.second == out2 + size(out2));
-    CHECK(std::equal(begin(expected), end(expected), out2));
-
-    std::fill_n(out2, size(out2), 0);
-
     using ranges::view::delimit;
-    char const *sz = "hello world";
-    char buf[50];
-    auto str = delimit(sz, '\0');
-    auto res3 = ranges::copy(str, buf);
-    *res3.second = '\0';
-    CHECK(res3.first == std::next(begin(str), std::strlen(sz)));
-    CHECK(res3.second == buf + std::strlen(sz));
-    CHECK(std::strcmp(sz, buf) == 0);
+    {
+        char const *sz = "hello world";
+        char buf[50];
+        auto str = delimit(sz, '\0');
+        auto res3 = ranges::copy(str, buf);
+        *res3.second = '\0';
+        CHECK(res3.first == std::next(begin(str), std::strlen(sz)));
+        CHECK(res3.second == buf + std::strlen(sz));
+        CHECK(std::strcmp(sz, buf) == 0);
+    }
+
+    {
+        char const *sz = "hello world";
+        char buf[50];
+        auto str = delimit(sz, '\0');
+        auto res3 = ranges::copy(std::move(str), buf);
+        *res3.second = '\0';
+        CHECK(res3.first.get_unsafe() == std::next(begin(str), std::strlen(sz)));
+        CHECK(res3.second == buf + std::strlen(sz));
+        CHECK(std::strcmp(sz, buf) == 0);
+    }
 
     return test_result();
 }

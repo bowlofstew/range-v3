@@ -20,6 +20,7 @@
 
 #include <cassert>
 #include <memory>
+#include <random>
 #include <vector>
 #include <algorithm>
 #include <range/v3/core.hpp>
@@ -35,6 +36,8 @@
 #include "../simple_test.hpp"
 #include "../test_utils.hpp"
 #include "../test_iterators.hpp"
+
+namespace { std::mt19937 gen; }
 
 // BUGBUG
 namespace std
@@ -145,7 +148,7 @@ test_larger_sorts(int N, int M)
     CHECK(ranges::sort(array, array+N) == array+N);
     CHECK(std::is_sorted(array, array+N));
     // test random pattern
-    std::random_shuffle(array, array+N);
+    std::shuffle(array, array+N, gen);
     CHECK(ranges::sort(array, array+N) == array+N);
     CHECK(std::is_sorted(array, array+N));
     // test sorted pattern
@@ -279,11 +282,27 @@ int main()
         }
     }
 
+    // Check rvalue range
+    {
+        std::vector<S> v(1000, S{});
+        for(int i = 0; (std::size_t)i < v.size(); ++i)
+        {
+            v[i].i = v.size() - i - 1;
+            v[i].j = i;
+        }
+        CHECK(ranges::sort(ranges::view::all(v), std::less<int>{}, &S::i).get_unsafe() == v.end());
+        for(int i = 0; (std::size_t)i < v.size(); ++i)
+        {
+            CHECK(v[i].i == i);
+            CHECK((std::size_t)v[i].j == v.size() - i - 1);
+        }
+    }
+
     // Check sorting a zip view, which uses iter_move
     {
         using namespace ranges;
         std::vector<int> v0 =
-            view::for_each(view::ints(1,5) | view::reverse, [](int i){
+            view::for_each(view::ints(1,6) | view::reverse, [](int i){
                 return ranges::yield_from(view::repeat_n(i,i));
             });
         auto v1 = ranges::to_<std::vector<Int>>(

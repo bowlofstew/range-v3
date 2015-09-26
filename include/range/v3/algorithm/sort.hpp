@@ -44,7 +44,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/algorithm/move_backward.hpp>
 #include <range/v3/algorithm/partial_sort.hpp>
 #include <range/v3/algorithm/heap_algorithm.hpp>
@@ -57,29 +56,23 @@ namespace ranges
         /// \cond
         namespace detail
         {
-            template<typename Val, typename C>
-            inline Val const &median(Val const &a, Val const &b, Val const &c, C &pred)
+            template<typename I, typename C, typename P>
+            inline I unguarded_partition(I begin, I end, C &pred, P &proj)
             {
-                if(pred(a, b))
-                    if(pred(b, c))
-                        return b;
-                    else if(pred(a, c))
-                        return c;
-                    else
-                        return a;
-                else if(pred(a, c))
-                    return a;
-                else if(pred(b, c))
-                    return c;
-                else
-                    return b;
-            }
+                I mid = begin + (end - begin) / 2, last = ranges::prev(end);
+                auto &&x = *begin, &&y = *mid, &&z = *last;
+                auto &&a = proj((decltype(x) &&)x), &&b = proj((decltype(y) &&)y), &&c = proj((decltype(z) &&)z);
 
-            template<typename I, typename Val, typename C, typename P>
-            inline I unguarded_partition(I begin, I end, Val const &pivot, C &pred, P &proj)
-            {
+                // Find the median:
+                I pivot_pnt = pred(a, b)
+                  ? (pred(b, c) ? mid   : (pred(a, c) ? last : begin))
+                  : (pred(a, c) ? begin : (pred(b, c) ? last : mid  ));
+
+                // Do the partition:
                 while(true)
                 {
+                    auto &&v = *pivot_pnt;
+                    auto &&pivot = proj((decltype(v) &&)v);
                     while(pred(proj(*begin), pivot))
                         ++begin;
                     --end;
@@ -88,6 +81,7 @@ namespace ranges
                     if(!(begin < end))
                         return begin;
                     ranges::iter_swap(begin, end);
+                    pivot_pnt = pivot_pnt == begin ? end : (pivot_pnt == end ? begin : pivot_pnt);
                     ++begin;
                 }
             }
@@ -175,11 +169,8 @@ namespace ranges
                 {
                     if(depth_limit == 0)
                         return partial_sort(begin, end, end, std::ref(pred), std::ref(proj)), void();
-                    I cut = detail::unguarded_partition(begin, end,
-                        detail::median(proj(*begin), proj(*(begin + (end - begin) / 2)),
-                            proj(*(end - 1)), pred),
-                        pred, proj);
-                    sort_fn::introsort_loop(cut, end, depth_limit - 1, pred, proj);
+                    I cut = detail::unguarded_partition(begin, end, pred, proj);
+                    sort_fn::introsort_loop(cut, end, --depth_limit, pred, proj);
                     end = cut;
                 }
             }
@@ -190,11 +181,11 @@ namespace ranges
                     IteratorRange<I, S>())>
             I operator()(I begin, S end_, C pred_ = C{}, P proj_ = P{}) const
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 if(begin == end_)
                     return begin;
-                I end = next_to(begin, end_);
+                I end = ranges::next(begin, end_);
                 sort_fn::introsort_loop(begin, end, sort_fn::log2(end - begin) * 2, pred, proj);
                 sort_fn::final_insertion_sort(begin, end, pred, proj);
                 return end;
@@ -202,8 +193,8 @@ namespace ranges
 
             template<typename Rng, typename C = ordered_less, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Sortable<I, C, P>() && RandomAccessIterable<Rng &>())>
-            I operator()(Rng & rng, C pred = C{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(Sortable<I, C, P>() && RandomAccessRange<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred = C{}, P proj = P{}) const
             {
                 return (*this)(begin(rng), end(rng), std::move(pred), std::move(proj));
             }
@@ -213,7 +204,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& sort = static_const<sort_fn>::value;
+            constexpr auto&& sort = static_const<with_braced_init_args<sort_fn>>::value;
         }
 
         /// @}

@@ -37,7 +37,7 @@ namespace ranges
             {
             private:
                 friend action_access;
-                template<typename Fun, CONCEPT_REQUIRES_(!Iterable<Fun>())>
+                template<typename Fun, CONCEPT_REQUIRES_(!Range<Fun>())>
                 static auto bind(take_while_fn take_while, Fun fun)
                 RANGES_DECLTYPE_AUTO_RETURN
                 (
@@ -49,11 +49,11 @@ namespace ranges
                     template<typename Rng, typename Fun,
                         typename I = range_iterator_t<Rng>,
                         typename S = range_sentinel_t<Rng>>
-                    auto requires_(Rng rng, Fun f) -> decltype(
+                    auto requires_(Rng&&, Fun&&) -> decltype(
                         concepts::valid_expr(
-                            concepts::model_of<concepts::ForwardIterable, Rng>(),
-                            concepts::model_of<concepts::EraseableIterable, Rng, I, S>(),
-                            concepts::is_true(IndirectInvokablePredicate<Fun, I>{})
+                            concepts::model_of<concepts::ForwardRange, Rng>(),
+                            concepts::model_of<concepts::ErasableRange, Rng, I, S>(),
+                            concepts::is_true(IndirectCallablePredicate<Fun, I>{})
                         ));
                 };
 
@@ -74,15 +74,15 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, Fun>())>
                 void operator()(Rng &&, Fun &&) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
                         "The object on which action::take_while operates must be a model of the "
-                        "ForwardIterable concept.");
+                        "ForwardRange concept.");
                     using I = range_iterator_t<Rng>;
                     using S = range_sentinel_t<Rng>;
-                    CONCEPT_ASSERT_MSG(EraseableIterable<Rng, I, S>(),
+                    CONCEPT_ASSERT_MSG(ErasableRange<Rng, I, S>(),
                         "The object on which action::take_while operates must allow element "
                         "removal.");
-                    CONCEPT_ASSERT_MSG(IndirectInvokablePredicate<Fun, I>(),
+                    CONCEPT_ASSERT_MSG(IndirectCallablePredicate<Fun, I>(),
                         "The function passed to action::take_while must be callable with objects "
                         "of the range's common reference type, and it must return something convertible to "
                         "bool.");

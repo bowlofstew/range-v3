@@ -20,6 +20,7 @@
 
 #include <cassert>
 #include <memory>
+#include <random>
 #include <vector>
 #include <algorithm>
 #include <range/v3/core.hpp>
@@ -27,6 +28,8 @@
 #include "../simple_test.hpp"
 #include "../test_utils.hpp"
 #include "../test_iterators.hpp"
+
+namespace { std::mt19937 gen; }
 
 struct indirect_less
 {
@@ -118,7 +121,7 @@ test_larger_sorts(int N, int M)
     CHECK(ranges::stable_sort(array, array+N) == array+N);
     CHECK(std::is_sorted(array, array+N));
     // test random pattern
-    std::random_shuffle(array, array+N);
+    std::shuffle(array, array+N, gen);
     CHECK(ranges::stable_sort(array, array+N) == array+N);
     CHECK(std::is_sorted(array, array+N));
     // test sorted pattern
@@ -205,6 +208,22 @@ int main()
             v[i].j = i;
         }
         ranges::stable_sort(v, std::less<int>{}, &S::i);
+        for(int i = 0; (std::size_t)i < v.size(); ++i)
+        {
+            CHECK(v[i].i == i);
+            CHECK((std::size_t)v[i].j == v.size() - i - 1);
+        }
+    }
+
+    // Check rvalue range
+    {
+        std::vector<S> v(1000, S{});
+        for(int i = 0; (std::size_t)i < v.size(); ++i)
+        {
+            v[i].i = v.size() - i - 1;
+            v[i].j = i;
+        }
+        CHECK(ranges::stable_sort(ranges::view::all(v), std::less<int>{}, &S::i).get_unsafe() == v.end());
         for(int i = 0; (std::size_t)i < v.size(); ++i)
         {
             CHECK(v[i].i == i);

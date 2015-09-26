@@ -22,6 +22,8 @@
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/static_const.hpp>
+#include <range/v3/utility/tagged_pair.hpp>
+#include <range/v3/algorithm/tagspec.hpp>
 
 namespace ranges
 {
@@ -31,31 +33,31 @@ namespace ranges
         /// @{
         struct copy_backward_fn
         {
-            template<typename I, typename S, typename O, typename P = ident,
+            template<typename I, typename S, typename O,
                 CONCEPT_REQUIRES_(
                     BidirectionalIterator<I>() && IteratorRange<I, S>() &&
                     BidirectionalIterator<O>() &&
-                    IndirectlyCopyable<I, O, P>()
+                    IndirectlyCopyable<I, O>()
                 )>
-            std::pair<I, O> operator()(I begin, S end_, O out, P proj = P{}) const
+            tagged_pair<tag::in(I), tag::out(O)> operator()(I begin, S end_, O out) const
             {
-                auto &&iproj = invokable(proj);
-                I i = next_to(begin, end_), end = i;
+                I i = ranges::next(begin, end_), end = i;
                 while(begin != i)
-                    *--out = iproj(*--i);
+                    *--out = *--i;
                 return {end, out};
             }
 
-            template<typename Rng, typename O, typename P = ident,
+            template<typename Rng, typename O,
                 typename I = range_iterator_t<Rng>,
                 CONCEPT_REQUIRES_(
-                    BidirectionalIterable<Rng &>() &&
+                    BidirectionalRange<Rng>() &&
                     BidirectionalIterator<O>() &&
-                    IndirectlyCopyable<I, O, P>()
+                    IndirectlyCopyable<I, O>()
                 )>
-            std::pair<I, O> operator()(Rng &rng, O out, P proj = P{}) const
+            tagged_pair<tag::in(range_safe_iterator_t<Rng>), tag::out(O)>
+            operator()(Rng &&rng, O out) const
             {
-                return (*this)(begin(rng), end(rng), std::move(out), std::move(proj));
+                return (*this)(begin(rng), end(rng), std::move(out));
             }
         };
 
@@ -63,7 +65,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& copy_backward = static_const<copy_backward_fn>::value;
+            constexpr auto&& copy_backward = static_const<with_braced_init_args<copy_backward_fn>>::value;
         }
 
         /// @}

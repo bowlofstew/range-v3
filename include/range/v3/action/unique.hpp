@@ -34,11 +34,11 @@ namespace ranges
             {
             private:
                 friend action_access;
-                template<typename C, typename P = ident, CONCEPT_REQUIRES_(!Iterable<C>())>
-                static auto bind(sort_fn sort, C pred, P proj = P{})
+                template<typename C, typename P = ident, CONCEPT_REQUIRES_(!Range<C>())>
+                static auto bind(unique_fn unique, C pred, P proj = P{})
                 RANGES_DECLTYPE_AUTO_RETURN
                 (
-                    std::bind(sort, std::placeholders::_1, protect(std::move(pred)),
+                    std::bind(unique, std::placeholders::_1, protect(std::move(pred)),
                         protect(std::move(proj)))
                 )
             public:
@@ -47,10 +47,10 @@ namespace ranges
                     template<typename Rng, typename C = equal_to, typename P = ident,
                         typename I = range_iterator_t<Rng>,
                         typename S = range_sentinel_t<Rng>>
-                    auto requires_(Rng rng, C pred = C{}, P proj = P{}) -> decltype(
+                        auto requires_(Rng&&, C&& = C{}, P&& = P{}) -> decltype(
                         concepts::valid_expr(
-                            concepts::model_of<concepts::ForwardIterable, Rng>(),
-                            concepts::model_of<concepts::EraseableIterable, Rng, I, S>(),
+                            concepts::model_of<concepts::ForwardRange, Rng>(),
+                            concepts::model_of<concepts::ErasableRange, Rng, I, S>(),
                             concepts::is_true(Sortable<I, C, P>())
                         ));
                 };
@@ -73,18 +73,18 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, C, P>())>
                 void operator()(Rng &&, C && = C{}, P && = P{}) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
                         "The object on which action::unique operates must be a model of the "
-                        "ForwardIterable concept.");
+                        "ForwardRange concept.");
                     using I = range_iterator_t<Rng>;
                     using S = range_sentinel_t<Rng>;
-                    CONCEPT_ASSERT_MSG(EraseableIterable<Rng, I, S>(),
+                    CONCEPT_ASSERT_MSG(ErasableRange<Rng, I, S>(),
                         "The object on which action::unique operates must allow element "
                         "removal.");
-                    CONCEPT_ASSERT_MSG(Projectable<I, P>(),
+                    CONCEPT_ASSERT_MSG(IndirectCallable<P, I>(),
                         "The projection function must accept objects of the iterator's value type, "
-                        "reference type, and rvalue reference type.");
-                    CONCEPT_ASSERT_MSG(IndirectInvokableRelation<C, Project<I, P>>(),
+                        "reference type, and common reference type.");
+                    CONCEPT_ASSERT_MSG(IndirectCallableRelation<C, Projected<I, P>>(),
                         "The comparator passed to action::unique must accept objects returned "
                         "by the projection function, or of the range's value type if no projection "
                         "is specified.");

@@ -110,7 +110,8 @@ int main()
     test<input_iterator<const int*>, const int*, bidirectional_iterator<int*> >();
     test<input_iterator<const int*>, const int*, random_access_iterator<int*> >();
     test<input_iterator<const int*>, const int*, int*>();
-
+#endif
+#ifdef SET_UNION_2
     test<forward_iterator<const int*>, input_iterator<const int*>, output_iterator<int*> >();
     test<forward_iterator<const int*>, input_iterator<const int*>, forward_iterator<int*> >();
     test<forward_iterator<const int*>, input_iterator<const int*>, bidirectional_iterator<int*> >();
@@ -140,9 +141,10 @@ int main()
     test<forward_iterator<const int*>, const int*, bidirectional_iterator<int*> >();
     test<forward_iterator<const int*>, const int*, random_access_iterator<int*> >();
     test<forward_iterator<const int*>, const int*, int*>();
-
+#endif
+#ifdef SET_UNION_3
     test<bidirectional_iterator<const int*>, input_iterator<const int*>, output_iterator<int*> >();
-    test<bidirectional_iterator<const int*>, input_iterator<const int*>, bidirectional_iterator<int*> >();
+    test<bidirectional_iterator<const int*>, input_iterator<const int*>, forward_iterator<int*> >();
     test<bidirectional_iterator<const int*>, input_iterator<const int*>, bidirectional_iterator<int*> >();
     test<bidirectional_iterator<const int*>, input_iterator<const int*>, random_access_iterator<int*> >();
     test<bidirectional_iterator<const int*>, input_iterator<const int*>, int*>();
@@ -152,9 +154,7 @@ int main()
     test<bidirectional_iterator<const int*>, forward_iterator<const int*>, bidirectional_iterator<int*> >();
     test<bidirectional_iterator<const int*>, forward_iterator<const int*>, random_access_iterator<int*> >();
     test<bidirectional_iterator<const int*>, forward_iterator<const int*>, int*>();
-#endif
 
-#ifdef SET_UNION_2
     test<bidirectional_iterator<const int*>, bidirectional_iterator<const int*>, output_iterator<int*> >();
     test<bidirectional_iterator<const int*>, bidirectional_iterator<const int*>, forward_iterator<int*> >();
     test<bidirectional_iterator<const int*>, bidirectional_iterator<const int*>, bidirectional_iterator<int*> >();
@@ -172,9 +172,10 @@ int main()
     test<bidirectional_iterator<const int*>, const int*, bidirectional_iterator<int*> >();
     test<bidirectional_iterator<const int*>, const int*, random_access_iterator<int*> >();
     test<bidirectional_iterator<const int*>, const int*, int*>();
-
+#endif
+#ifdef SET_UNION_4
     test<random_access_iterator<const int*>, input_iterator<const int*>, output_iterator<int*> >();
-    test<random_access_iterator<const int*>, input_iterator<const int*>, bidirectional_iterator<int*> >();
+    test<random_access_iterator<const int*>, input_iterator<const int*>, forward_iterator<int*> >();
     test<random_access_iterator<const int*>, input_iterator<const int*>, bidirectional_iterator<int*> >();
     test<random_access_iterator<const int*>, input_iterator<const int*>, random_access_iterator<int*> >();
     test<random_access_iterator<const int*>, input_iterator<const int*>, int*>();
@@ -202,7 +203,8 @@ int main()
     test<random_access_iterator<const int*>, const int*, bidirectional_iterator<int*> >();
     test<random_access_iterator<const int*>, const int*, random_access_iterator<int*> >();
     test<random_access_iterator<const int*>, const int*, int*>();
-
+#endif
+#ifdef SET_UNION_5
     test<const int*, input_iterator<const int*>, output_iterator<int*> >();
     test<const int*, input_iterator<const int*>, bidirectional_iterator<int*> >();
     test<const int*, input_iterator<const int*>, bidirectional_iterator<int*> >();
@@ -232,7 +234,8 @@ int main()
     test<const int*, const int*, bidirectional_iterator<int*> >();
     test<const int*, const int*, random_access_iterator<int*> >();
     test<const int*, const int*, int*>();
-
+#endif
+#ifdef SET_UNION_6
     // Test projections
     {
         S ia[] = {S{1}, S{2}, S{2}, S{3}, S{3}, S{3}, S{4}, S{4}, S{4}, S{4}};
@@ -249,6 +252,28 @@ int main()
 
         using R2 = std::tuple<T *, S*, U*>;
         R2 res2 = ranges::set_union(ib, ia, ic, std::less<int>(), &T::j, &S::i);
+        CHECK((std::get<2>(res2) - ic) == sr);
+        CHECK(ranges::lexicographical_compare(ic, std::get<2>(res2), ir, ir+sr, std::less<int>(), &U::k) == 0);
+    }
+
+    // Test projections
+    {
+        S ia[] = {S{1}, S{2}, S{2}, S{3}, S{3}, S{3}, S{4}, S{4}, S{4}, S{4}};
+        T ib[] = {T{2}, T{4}, T{4}, T{6}};
+        U ic[20];
+        int ir[] = {1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 6};
+        const int sr = sizeof(ir)/sizeof(ir[0]);
+
+        auto res = ranges::set_union(ranges::view::all(ia), ranges::view::all(ib), ic, std::less<int>(), &S::i, &T::j);
+        CHECK(std::get<0>(res).get_unsafe() == ranges::end(ia));
+        CHECK(std::get<1>(res).get_unsafe() == ranges::end(ib));
+        CHECK((std::get<2>(res) - ic) == sr);
+        CHECK(ranges::lexicographical_compare(ic, std::get<2>(res), ir, ir+sr, std::less<int>(), &U::k) == 0);
+        ranges::fill(ic, U{0});
+
+        auto res2 = ranges::set_union(ranges::view::all(ib), ranges::view::all(ia), ic, std::less<int>(), &T::j, &S::i);
+        CHECK(std::get<0>(res2).get_unsafe() == ranges::end(ib));
+        CHECK(std::get<1>(res2).get_unsafe() == ranges::end(ia));
         CHECK((std::get<2>(res2) - ic) == sr);
         CHECK(ranges::lexicographical_compare(ic, std::get<2>(res2), ir, ir+sr, std::less<int>(), &U::k) == 0);
     }

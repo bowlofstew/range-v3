@@ -21,6 +21,7 @@
 #ifndef RANGES_V3_ALGORITHM_PARTITION_HPP
 #define RANGES_V3_ALGORITHM_PARTITION_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
@@ -28,7 +29,6 @@
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/swap.hpp>
 #include <range/v3/utility/static_const.hpp>
 
@@ -41,7 +41,7 @@ namespace ranges
         using Partitionable = meta::fast_and<
             ForwardIterator<I>,
             Permutable<I>,
-            IndirectInvokablePredicate<C, Project<I, P>>>;
+            IndirectCallablePredicate<C, Projected<I, P>>>;
 
         /// \addtogroup group-algorithms
         /// @{
@@ -51,8 +51,8 @@ namespace ranges
             template<typename I, typename S, typename C, typename P>
             static I impl(I begin, S end, C pred_, P proj_, concepts::ForwardIterator*)
             {
-                auto && pred = invokable(pred_);
-                auto && proj = invokable(proj_);
+                auto && pred = as_function(pred_);
+                auto && proj = as_function(proj_);
                 while(true)
                 {
                     if(begin == end)
@@ -75,9 +75,9 @@ namespace ranges
             template<typename I, typename S, typename C, typename P>
             static I impl(I begin, S end_, C pred_, P proj_, concepts::BidirectionalIterator*)
             {
-                auto && pred = invokable(pred_);
-                auto && proj = invokable(proj_);
-                I end = next_to(begin, end_);
+                auto && pred = as_function(pred_);
+                auto && proj = as_function(proj_);
+                I end = ranges::next(begin, end_);
                 while(true)
                 {
                     while(true)
@@ -108,8 +108,8 @@ namespace ranges
 
             template<typename Rng, typename C, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Partitionable<I, C, P>() && Iterable<Rng &>())>
-            I operator()(Rng &rng, C pred, P proj = P{}) const
+                CONCEPT_REQUIRES_(Partitionable<I, C, P>() && Range<Rng>())>
+            range_safe_iterator_t<Rng> operator()(Rng &&rng, C pred, P proj = P{}) const
             {
                 return partition_fn::impl(begin(rng), end(rng), std::move(pred),
                     std::move(proj), iterator_concept<I>());
@@ -120,7 +120,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& partition = static_const<partition_fn>::value;
+            constexpr auto&& partition = static_const<with_braced_init_args<partition_fn>>::value;
         }
 
         /// @}

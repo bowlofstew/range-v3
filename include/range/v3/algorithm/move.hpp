@@ -20,10 +20,11 @@
 #include <range/v3/range_traits.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
-#include <range/v3/utility/invokable.hpp>
 #include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/move.hpp>
 #include <range/v3/utility/static_const.hpp>
+#include <range/v3/utility/tagged_pair.hpp>
+#include <range/v3/algorithm/tagspec.hpp>
 
 namespace ranges
 {
@@ -35,28 +36,24 @@ namespace ranges
         {
             using aux::move_fn::operator();
 
-            template<typename I, typename S, typename O, typename P = ident,
+            template<typename I, typename S, typename O,
                 CONCEPT_REQUIRES_(InputIterator<I>() && IteratorRange<I, S>() &&
-                    WeaklyIncrementable<O>() && IndirectlyMovable<I, O, P>())>
-            std::pair<I, O> operator()(I begin, S end, O out, P proj_ = P{}) const
+                    WeaklyIncrementable<O>() && IndirectlyMovable<I, O>())>
+            tagged_pair<tag::in(I), tag::out(O)> operator()(I begin, S end, O out) const
             {
-                auto &&proj = invokable(proj_);
                 for(; begin != end; ++begin, ++out)
-                {
-                    // BUGBUG should the projection be applied *before* the move?
-                    auto &&x = iter_move(begin);
-                    *out = proj((decltype(x) &&) x);
-                }
+                    *out = iter_move(begin);
                 return {begin, out};
             }
 
-            template<typename Rng, typename O, typename P = ident,
+            template<typename Rng, typename O,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(InputIterable<Rng &>() && WeaklyIncrementable<O>() &&
-                    IndirectlyMovable<I, O, P>())>
-            std::pair<I, O> operator()(Rng &rng, O out, P proj = P{}) const
+                CONCEPT_REQUIRES_(InputRange<Rng>() && WeaklyIncrementable<O>() &&
+                    IndirectlyMovable<I, O>())>
+            tagged_pair<tag::in(range_safe_iterator_t<Rng>), tag::out(O)>
+            operator()(Rng &&rng, O out) const
             {
-                return (*this)(begin(rng), end(rng), std::move(out), std::move(proj));
+                return (*this)(begin(rng), end(rng), std::move(out));
             }
         };
 
@@ -64,7 +61,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& move = static_const<move_fn>::value;
+            constexpr auto&& move = static_const<with_braced_init_args<move_fn>>::value;
         }
 
         /// @}

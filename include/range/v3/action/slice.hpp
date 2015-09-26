@@ -15,6 +15,7 @@
 #define RANGES_V3_ACTION_SLICE_HPP
 
 #include <functional>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/action/action.hpp>
 #include <range/v3/action/erase.hpp>
@@ -47,12 +48,12 @@ namespace ranges
                     template<typename Rng, typename T, typename U,
                         typename I = range_iterator_t<Rng>,
                         typename D = range_difference_t<Rng>>
-                    auto requires_(Rng rng, T, U) -> decltype(
+                    auto requires_(Rng&&, T&&, U&&) -> decltype(
                         concepts::valid_expr(
-                            concepts::model_of<concepts::ForwardIterable, Rng>(),
-                            concepts::model_of<concepts::EraseableIterable, Rng, I, I>(),
-                            concepts::model_of<concepts::Convertible, T, D>(),
-                            concepts::model_of<concepts::Convertible, U, D>()
+                            concepts::model_of<concepts::ForwardRange, Rng>(),
+                            concepts::model_of<concepts::ErasableRange, Rng, I, I>(),
+                            concepts::model_of<concepts::ConvertibleTo, T, D>(),
+                            concepts::model_of<concepts::ConvertibleTo, U, D>()
                         ));
                 };
 
@@ -78,15 +79,15 @@ namespace ranges
                     CONCEPT_REQUIRES_(!Concept<Rng, T, U>())>
                 void operator()(Rng &&, T &&, U &&) const
                 {
-                    CONCEPT_ASSERT_MSG(ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(ForwardRange<Rng>(),
                         "The object on which action::slice operates must be a model of the "
-                        "ForwardIterable concept.");
+                        "ForwardRange concept.");
                     using I = range_iterator_t<Rng>;
-                    CONCEPT_ASSERT_MSG(EraseableIterable<Rng, I, I>(),
+                    CONCEPT_ASSERT_MSG(ErasableRange<Rng, I, I>(),
                         "The object on which action::slice operates must allow element "
                         "removal.");
-                    CONCEPT_ASSERT_MSG(meta::and_<Convertible<T, range_difference_t<Rng>>,
-                            Convertible<U, range_difference_t<Rng>>>(),
+                    CONCEPT_ASSERT_MSG(meta::and_<ConvertibleTo<T, range_difference_t<Rng>>,
+                            ConvertibleTo<U, range_difference_t<Rng>>>(),
                         "The bounds passed to action::slice must be convertible to the range's "
                         "difference type. TODO slicing from the end with 'end-2' syntax is not "
                         "supported yet, sorry!");

@@ -21,6 +21,7 @@
 #ifndef RANGES_V3_ALGORITHM_SEARCH_N_HPP
 #define RANGES_V3_ALGORITHM_SEARCH_N_HPP
 
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/empty.hpp>
@@ -41,50 +42,13 @@ namespace ranges
         template<typename I, typename V, typename C = equal_to, typename P = ident>
         using Searchnable = meta::fast_and<
             ForwardIterator<I>,
-            IndirectInvokableRelation<C, Project<I, P>, V const *>>;
+            IndirectCallableRelation<C, Projected<I, P>, V const *>>;
 
         /// \addtogroup group-algorithms
         /// @{
         struct search_n_fn
         {
         private:
-            template<typename I, typename D, typename V, typename C, typename P,
-                CONCEPT_REQUIRES_(RandomAccessIterator<I>())>
-            static I sized_impl(I const begin_, I end, D d, D count, V const &val,
-                C &pred, P &proj)
-            {
-                if(d < count)
-                    return end;
-                auto begin = uncounted(begin_);
-                auto const s = uncounted(end - (count - 1)); // Start of pattern match can't go beyond here
-                while(true)
-                {
-                    // Find first element in sequence that matches val, with a mininum of loop checks
-                    while(true)
-                    {
-                        if(begin >= s)  // return the end if we've run out of room
-                            return end;
-                        if(pred(proj(*begin), val))
-                            break;
-                        ++begin;
-                    }
-                    // *begin matches val, now match elements after here
-                    auto m = begin;
-                    D c = 0;
-                    while(true)
-                    {
-                        if(++c == count)  // If pattern exhausted, begin is the answer (works for 1 element pattern)
-                            return recounted(begin_, std::move(begin));
-                        ++m;  // No need to check, we know we have room to match successfully
-                        if(!pred(proj(*m), val))  // if there is a mismatch, restart with a new begin
-                        {
-                            begin = next(std::move(m));
-                            break;
-                        }  // else there is a match, check next elements
-                    }
-                }
-            }
-
             template<typename I, typename S, typename D, typename V, typename C, typename P>
             static I sized_impl(I const begin_, S end, D const d_, D count,
                 V const &val, C &pred, P &proj)
@@ -97,7 +61,7 @@ namespace ranges
                     while(true)
                     {
                         if(d < count)  // return the end if we've run out of room
-                            return next_to(recounted(begin_, std::move(begin), d_ - d), std::move(end));
+                            return ranges::next(recounted(begin_, std::move(begin), d_ - d), std::move(end));
                         if(pred(proj(*begin), val))
                             break;
                         ++begin;
@@ -160,26 +124,28 @@ namespace ranges
             {
                 if(count <= 0)
                     return begin;
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 if(SizedIteratorRange<I, S>())
-                    return search_n_fn::sized_impl(std::move(begin), std::move(end), distance(begin, end),
-                        count, val, pred, proj);
+                    return search_n_fn::sized_impl(std::move(begin), std::move(end),
+                        distance(begin, end), count, val, pred, proj);
                 else
-                    return search_n_fn::impl(std::move(begin), std::move(end), count, val, pred, proj);
+                    return search_n_fn::impl(std::move(begin), std::move(end), count, val, pred,
+                        proj);
             }
 
             template<typename Rng, typename V, typename C = equal_to, typename P = ident,
                 typename I = range_iterator_t<Rng>,
-                CONCEPT_REQUIRES_(Searchnable<I, V, C, P>() && Iterable<Rng &>())>
-            I operator()(Rng & rng, iterator_difference_t<I> count, V const &val,
-                C pred_ = C{}, P proj_ = P{}) const
+                CONCEPT_REQUIRES_(Searchnable<I, V, C, P>() && Range<Rng>())>
+            range_safe_iterator_t<Rng>
+            operator()(Rng &&rng, iterator_difference_t<I> count, V const &val, C pred_ = C{},
+                P proj_ = P{}) const
             {
                 if(count <= 0)
                     return begin(rng);
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
-                if(SizedIterable<Rng>())
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
+                if(SizedRange<Rng>())
                     return search_n_fn::sized_impl(begin(rng), end(rng), distance(rng), count, val,
                         pred, proj);
                 else
@@ -191,7 +157,7 @@ namespace ranges
         /// \ingroup group-algorithms
         namespace
         {
-            constexpr auto&& search_n = static_const<search_n_fn>::value;
+            constexpr auto&& search_n = static_const<with_braced_init_args<search_n_fn>>::value;
         }
 
         /// @}

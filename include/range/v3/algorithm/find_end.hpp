@@ -14,11 +14,11 @@
 #define RANGES_V3_ALGORITHM_FIND_END_HPP
 
 #include <utility>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/begin_end.hpp>
 #include <range/v3/range_concepts.hpp>
 #include <range/v3/range_traits.hpp>
-#include <range/v3/utility/meta.hpp>
 #include <range/v3/utility/iterator_concepts.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/functional.hpp>
@@ -35,7 +35,7 @@ namespace ranges
                 CONCEPT_REQUIRES_(InputIterator<I>() && IteratorRange<I, S>())>
             I next_to_if(I i, S s, std::true_type)
             {
-                return next_to(i, s);
+                return ranges::next(i, s);
             }
 
             template<typename I, typename S,
@@ -64,12 +64,12 @@ namespace ranges
             impl(I1 begin1, S1 end1, I2 begin2, S2 end2, R pred_, P proj_,
                  concepts::ForwardIterator*, concepts::ForwardIterator*)
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 bool found = false;
                 I1 res;
                 if(begin2 == end2)
-                    return next_to(begin1, end1);
+                    return ranges::next(begin1, end1);
                 while(true)
                 {
                     while(true)
@@ -106,8 +106,8 @@ namespace ranges
             impl(I1 begin1, I1 end1, I2 begin2, I2 end2, R pred_, P proj_,
                  concepts::BidirectionalIterator*, concepts::BidirectionalIterator*)
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 // modeled after search algorithm (in reverse)
                 if(begin2 == end2)
                     return end1;  // Everything matches an empty sequence
@@ -138,8 +138,8 @@ namespace ranges
             impl(I1 begin1, I1 end1, I2 begin2, I2 end2, R pred_, P proj_,
                  concepts::RandomAccessIterator*, concepts::RandomAccessIterator*)
             {
-                auto &&pred = invokable(pred_);
-                auto &&proj = invokable(proj_);
+                auto &&pred = as_function(pred_);
+                auto &&proj = as_function(proj_);
                 // Take advantage of knowing source and pattern lengths.  Stop short when source is smaller than pattern
                 auto len2 = end2 - begin2;
                 if(len2 == 0)
@@ -168,7 +168,7 @@ namespace ranges
                 typename P = ident,
                 CONCEPT_REQUIRES_(ForwardIterator<I1>() && IteratorRange<I1, S1>() &&
                     ForwardIterator<I2>() && IteratorRange<I2, S2>() &&
-                    IndirectInvokableRelation<R, Project<I1, P>, I2>())>
+                    IndirectCallableRelation<R, Projected<I1, P>, I2>())>
             I1 operator()(I1 begin1, S1 end1, I2 begin2, S2 end2, R pred = R{}, P proj = P{}) const
             {
                 constexpr bool Bidi = BidirectionalIterator<I1>() && BidirectionalIterator<I2>();
@@ -182,9 +182,9 @@ namespace ranges
             template<typename Rng1, typename Rng2, typename R = equal_to, typename P = ident,
                 typename I1 = range_iterator_t<Rng1>,
                 typename I2 = range_iterator_t<Rng2>,
-                CONCEPT_REQUIRES_(ForwardIterable<Rng1 &>() && ForwardIterable<Rng2>() &&
-                    IndirectInvokableRelation<R, Project<I1, P>, I2>())>
-            I1 operator()(Rng1 &rng1, Rng2 &&rng2, R pred = R{}, P proj = P{}) const
+                CONCEPT_REQUIRES_(ForwardRange<Rng1>() && ForwardRange<Rng2>() &&
+                    IndirectCallableRelation<R, Projected<I1, P>, I2>())>
+            range_safe_iterator_t<Rng1> operator()(Rng1 &&rng1, Rng2 &&rng2, R pred = R{}, P proj = P{}) const
             {
                 return (*this)(begin(rng1), end(rng1), begin(rng2), end(rng2), std::move(pred),
                     std::move(proj));

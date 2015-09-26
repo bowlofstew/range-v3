@@ -15,14 +15,14 @@
 #define RANGES_V3_VIEW_SLICE_HPP
 
 #include <type_traits>
+#include <meta/meta.hpp>
 #include <range/v3/range_fwd.hpp>
 #include <range/v3/range_traits.hpp>
 #include <range/v3/range_concepts.hpp>
-#include <range/v3/range_interface.hpp>
+#include <range/v3/view_interface.hpp>
 #include <range/v3/range.hpp>
-#include <range/v3/utility/meta.hpp>
 #include <range/v3/utility/optional.hpp>
-#include <range/v3/utility/pipeable.hpp>
+#include <range/v3/utility/functional.hpp>
 #include <range/v3/utility/iterator_traits.hpp>
 #include <range/v3/utility/counted_iterator.hpp>
 #include <range/v3/utility/static_const.hpp>
@@ -39,7 +39,7 @@ namespace ranges
         namespace detail
         {
             template<typename Rng, typename Int>
-            range_iterator_t<Rng> pos_at_(Rng && rng, Int i, concepts::InputIterable *,
+            range_iterator_t<Rng> pos_at_(Rng && rng, Int i, concepts::InputRange *,
                 std::true_type)
             {
                 RANGES_ASSERT(0 <= i);
@@ -47,46 +47,45 @@ namespace ranges
             }
 
             template<typename Rng, typename Int>
-            range_iterator_t<Rng> pos_at_(Rng && rng, Int i, concepts::BidirectionalIterable *,
+            range_iterator_t<Rng> pos_at_(Rng && rng, Int i, concepts::BidirectionalRange *,
                 std::false_type)
             {
                 if(0 > i)
                 {
                     // If it's not bounded and we know the size, faster to count from the front
-                    if(SizedIterable<Rng>() && !BoundedIterable<Rng>())
+                    if(SizedRange<Rng>() && !BoundedRange<Rng>())
                         return next(ranges::begin(rng), distance(rng) + i);
                     // Otherwise, probably faster to count from the back.
-                    return next(next_to(ranges::begin(rng), ranges::end(rng)), i);
+                    return next(ranges::next(ranges::begin(rng), ranges::end(rng)), i);
                 }
                 return next(ranges::begin(rng), i);
             }
 
             template<typename Rng, typename Int>
-            range_iterator_t<Rng> pos_at_(Rng && rng, Int i, concepts::InputIterable *,
+            range_iterator_t<Rng> pos_at_(Rng && rng, Int i, concepts::InputRange *,
                 std::false_type)
             {
-                RANGES_ASSERT(i >= 0 || SizedIterable<Rng>() || ForwardIterable<Rng>());
+                RANGES_ASSERT(i >= 0 || SizedRange<Rng>() || ForwardRange<Rng>());
                 if(0 > i)
                     return next(ranges::begin(rng), distance(rng) + i);
                 return next(ranges::begin(rng), i);
             }
 
-            template<typename Rng, bool IsRandomAccess = RandomAccessIterable<Rng>()>
+            template<typename Rng, bool IsRandomAccess = RandomAccessRange<Rng>()>
             struct slice_view_
-              : range_facade<slice_view<Rng>, false>
+              : view_facade<slice_view<Rng>, finite>
             {
             private:
                 friend range_access;
-                using base_range_t = view::all_t<Rng>;
                 using difference_type_ = range_difference_t<Rng>;
-                base_range_t rng_;
+                Rng rng_;
                 difference_type_ from_, count_;
                 optional<range_iterator_t<Rng>> begin_;
 
                 range_iterator_t<Rng> get_begin_()
                 {
                     if(!begin_)
-                        begin_ = detail::pos_at_(rng_, from_, iterable_concept<Rng>{},
+                        begin_ = detail::pos_at_(rng_, from_, range_concept<Rng>{},
                             is_infinite<Rng>{});
                     return *begin_;
                 }
@@ -106,8 +105,8 @@ namespace ranges
                 slice_view_(slice_view_ const &that)
                   : rng_(that.rng_), from_(that.from_), count_(that.count_), begin_{}
                 {}
-                slice_view_(Rng && rng, difference_type_ from, difference_type_ count)
-                  : rng_(view::all(std::forward<Rng>(rng))), from_(from), count_(count), begin_{}
+                slice_view_(Rng rng, difference_type_ from, difference_type_ count)
+                  : rng_(std::move(rng)), from_(from), count_(count), begin_{}
                 {}
                 slice_view_& operator=(slice_view_ &&that)
                 {
@@ -129,11 +128,11 @@ namespace ranges
                 {
                     return static_cast<range_size_t<Rng>>(count_);
                 }
-                base_range_t & base()
+                Rng & base()
                 {
                     return rng_;
                 }
-                base_range_t const & base() const
+                Rng const & base() const
                 {
                     return rng_;
                 }
@@ -141,51 +140,52 @@ namespace ranges
 
             template<typename Rng>
             struct slice_view_<Rng, true>
-              : range_interface<slice_view<Rng>>
+              : view_interface<slice_view<Rng>, finite>
             {
             private:
-                using base_range_t = view::all_t<Rng>;
                 using difference_type_ = range_difference_t<Rng>;
-                base_range_t rng_;
+                Rng rng_;
                 difference_type_ from_, count_;
             public:
                 slice_view_() = default;
-                slice_view_(Rng && rng, difference_type_ from, difference_type_ count)
-                  : rng_(view::all(std::forward<Rng>(rng))), from_(from), count_(count)
+                slice_view_(Rng rng, difference_type_ from, difference_type_ count)
+                  : rng_(std::move(rng)), from_(from), count_(count)
                 {
                     RANGES_ASSERT(0 <= count_);
                 }
                 range_iterator_t<Rng> begin()
                 {
-                    return detail::pos_at_(rng_, from_, iterable_concept<Rng>{},
+                    return detail::pos_at_(rng_, from_, range_concept<Rng>{},
                         is_infinite<Rng>{});
                 }
                 range_iterator_t<Rng> end()
                 {
-                    return detail::pos_at_(rng_, from_, iterable_concept<Rng>{},
+                    return detail::pos_at_(rng_, from_, range_concept<Rng>{},
                         is_infinite<Rng>{}) + count_;
                 }
-                CONCEPT_REQUIRES(Iterable<Rng const>())
-                range_iterator_t<Rng const> begin() const
+                template<typename BaseRng = Rng,
+                    CONCEPT_REQUIRES_(Range<BaseRng const>())>
+                range_iterator_t<BaseRng const> begin() const
                 {
-                    return detail::pos_at_(rng_, from_, iterable_concept<Rng>{},
+                    return detail::pos_at_(rng_, from_, range_concept<Rng>{},
                         is_infinite<Rng>{});
                 }
-                CONCEPT_REQUIRES(Iterable<Rng const>())
-                range_iterator_t<Rng const> end() const
+                template<typename BaseRng = Rng,
+                    CONCEPT_REQUIRES_(Range<BaseRng const>())>
+                range_iterator_t<BaseRng const> end() const
                 {
-                    return detail::pos_at_(rng_, from_, iterable_concept<Rng>{},
+                    return detail::pos_at_(rng_, from_, range_concept<Rng>{},
                         is_infinite<Rng>{}) + count_;
                 }
                 range_size_t<Rng> size() const
                 {
                     return static_cast<range_size_t<Rng>>(count_);
                 }
-                base_range_t & base()
+                Rng & base()
                 {
                     return rng_;
                 }
-                base_range_t const & base() const
+                Rng const & base() const
                 {
                     return rng_;
                 }
@@ -197,10 +197,10 @@ namespace ranges
         namespace adl_begin_end_detail
         {
             template<typename Int, CONCEPT_REQUIRES_(Integral<Int>())>
-            detail::from_end_<meta::eval<std::make_signed<Int>>> operator-(end_fn, Int dist)
+            detail::from_end_<meta::_t<std::make_signed<Int>>> operator-(end_fn, Int dist)
             {
-                RANGES_ASSERT(0 <= static_cast<meta::eval<std::make_signed<Int>>>(dist));
-                return {-static_cast<meta::eval<std::make_signed<Int>>>(dist)};
+                RANGES_ASSERT(0 <= static_cast<meta::_t<std::make_signed<Int>>>(dist));
+                return {-static_cast<meta::_t<std::make_signed<Int>>>(dist)};
             }
         }
         /// \endcond
@@ -222,19 +222,19 @@ namespace ranges
                 friend view_access;
 
                 template<typename Rng>
-                static slice_view<Rng>
+                static slice_view<all_t<Rng>>
                 invoke_(Rng && rng, range_difference_t<Rng> from, range_difference_t<Rng> count,
-                    concepts::InputIterable *, concepts::Iterable * = nullptr)
+                    concepts::InputRange *, concepts::Range * = nullptr)
                 {
-                    return {std::forward<Rng>(rng), from, count};
+                    return {all(std::forward<Rng>(rng)), from, count};
                 }
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!Range<Rng>() && std::is_lvalue_reference<Rng>())>
+                    CONCEPT_REQUIRES_(!View<Rng>() && std::is_lvalue_reference<Rng>())>
                 static range<range_iterator_t<Rng>>
                 invoke_(Rng && rng, range_difference_t<Rng> from, range_difference_t<Rng> count,
-                    concepts::RandomAccessIterable *, concepts::BoundedIterable * = nullptr)
+                    concepts::RandomAccessRange *, concepts::BoundedRange * = nullptr)
                 {
-                    auto it = detail::pos_at_(rng, from, iterable_concept<Rng>{}, is_infinite<Rng>{});
+                    auto it = detail::pos_at_(rng, from, range_concept<Rng>{}, is_infinite<Rng>{});
                     return {it, it + count};
                 }
 
@@ -273,53 +273,53 @@ namespace ranges
             public:
                 // slice(rng, 2, 4)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(InputIterable<Rng>())>
+                    CONCEPT_REQUIRES_(InputRange<Rng>())>
                 auto operator()(Rng && rng, range_difference_t<Rng> from,
                     range_difference_t<Rng> to) const ->
                     decltype(slice_fn::invoke_(std::forward<Rng>(rng), from, to - from,
-                        iterable_concept<Rng>{}))
+                        range_concept<Rng>{}))
                 {
                     RANGES_ASSERT(0 <= from && from <= to);
                     return slice_fn::invoke_(std::forward<Rng>(rng), from, to - from,
-                        iterable_concept<Rng>{});
+                        range_concept<Rng>{});
                 }
                 // slice(rng, 4, end-2)
-                //  TODO Support Forward, non-Sized iterables by returning a range that
+                //  TODO Support Forward, non-Sized ranges by returning a range that
                 //       doesn't know it's size?
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(InputIterable<Rng>() && SizedIterable<Rng>())>
+                    CONCEPT_REQUIRES_(InputRange<Rng>() && SizedRange<Rng>())>
                 auto operator()(Rng && rng, range_difference_t<Rng> from,
                     detail::from_end_<range_difference_t<Rng>> to) const ->
                     decltype(slice_fn::invoke_(std::forward<Rng>(rng), from,
-                        distance(rng) + to.dist_ - from, iterable_concept<Rng>{}))
+                        distance(rng) + to.dist_ - from, range_concept<Rng>{}))
                 {
                     static_assert(!is_infinite<Rng>(),
                         "Can't index from the end of an infinite range!");
                     RANGES_ASSERT(0 <= from);
                     RANGES_ASSERT(from <= distance(rng) + to.dist_);
                     return slice_fn::invoke_(std::forward<Rng>(rng), from,
-                        distance(rng) + to.dist_ - from, iterable_concept<Rng>{});
+                        distance(rng) + to.dist_ - from, range_concept<Rng>{});
                 }
                 // slice(rng, end-4, end-2)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_((InputIterable<Rng>() && SizedIterable<Rng>()) ||
-                        ForwardIterable<Rng>())>
+                    CONCEPT_REQUIRES_((InputRange<Rng>() && SizedRange<Rng>()) ||
+                        ForwardRange<Rng>())>
                 auto operator()(Rng && rng, detail::from_end_<range_difference_t<Rng>> from,
                     detail::from_end_<range_difference_t<Rng>> to) const ->
                     decltype(slice_fn::invoke_(std::forward<Rng>(rng), from.dist_,
-                        to.dist_ - from.dist_, iterable_concept<Rng>{},
-                        bounded_iterable_concept<Rng>{}()))
+                        to.dist_ - from.dist_, range_concept<Rng>{},
+                        bounded_range_concept<Rng>{}()))
                 {
                     static_assert(!is_infinite<Rng>(),
                         "Can't index from the end of an infinite range!");
                     RANGES_ASSERT(from.dist_ <= to.dist_);
                     return slice_fn::invoke_(std::forward<Rng>(rng), from.dist_,
-                        to.dist_ - from.dist_, iterable_concept<Rng>{},
-                        bounded_iterable_concept<Rng>{}());
+                        to.dist_ - from.dist_, range_concept<Rng>{},
+                        bounded_range_concept<Rng>{}());
                 }
                 // slice(rng, 4, end)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(InputIterable<Rng>())>
+                    CONCEPT_REQUIRES_(InputRange<Rng>())>
                 auto operator()(Rng && rng, range_difference_t<Rng> from, end_fn) const ->
                     decltype(ranges::view::drop(std::forward<Rng>(rng), from))
                 {
@@ -328,19 +328,19 @@ namespace ranges
                 }
                 // slice(rng, end-4, end)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_((InputIterable<Rng>() && SizedIterable<Rng>()) ||
-                        ForwardIterable<Rng>())>
+                    CONCEPT_REQUIRES_((InputRange<Rng>() && SizedRange<Rng>()) ||
+                        ForwardRange<Rng>())>
                 auto operator()(Rng && rng, detail::from_end_<range_difference_t<Rng>> from,
                     end_fn) const ->
                     decltype(slice_fn::invoke_(std::forward<Rng>(rng), from.dist_,
-                        -from.dist_, iterable_concept<Rng>{},
-                        bounded_iterable_concept<Rng>{}()))
+                        -from.dist_, range_concept<Rng>{},
+                        bounded_range_concept<Rng>{}()))
                 {
                     static_assert(!is_infinite<Rng>(),
                         "Can't index from the end of an infinite range!");
                     return slice_fn::invoke_(std::forward<Rng>(rng), from.dist_,
-                        -from.dist_, iterable_concept<Rng>{},
-                        bounded_iterable_concept<Rng>{}());
+                        -from.dist_, range_concept<Rng>{},
+                        bounded_range_concept<Rng>{}());
                 }
 
             #ifndef RANGES_DOXYGEN_INVOKED
@@ -351,59 +351,59 @@ namespace ranges
 
                 // slice(rng, 2, 4)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!InputIterable<Rng>())>
+                    CONCEPT_REQUIRES_(!InputRange<Rng>())>
                 void operator()(Rng &&, range_difference_t<Rng>, range_difference_t<Rng>) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
-                        "The object to be sliced must be a model of the InputIterable concept.");
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
+                        "The object to be sliced must be a model of the InputRange concept.");
                 }
                 // slice(rng, 4, end-2)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!(InputIterable<Rng>() && SizedIterable<Rng>()))>
+                    CONCEPT_REQUIRES_(!(InputRange<Rng>() && SizedRange<Rng>()))>
                 void operator()(Rng &&, range_difference_t<Rng>,
                     detail::from_end_<range_difference_t<Rng>>) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
-                        "The object to be sliced must be a model of the InputIterable concept.");
-                    CONCEPT_ASSERT_MSG(SizedIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
+                        "The object to be sliced must be a model of the InputRange concept.");
+                    CONCEPT_ASSERT_MSG(SizedRange<Rng>(),
                         "When slicing a range with a positive start offset and a stop offset "
-                        "measured from the end, the range must be a model of the SizedIterable "
+                        "measured from the end, the range must be a model of the SizedRange "
                         "concept; that is, its size must be known.");
                 }
                 // slice(rng, end-4, end-2)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!((InputIterable<Rng>() && SizedIterable<Rng>()) ||
-                        ForwardIterable<Rng>()))>
+                    CONCEPT_REQUIRES_(!((InputRange<Rng>() && SizedRange<Rng>()) ||
+                        ForwardRange<Rng>()))>
                 void operator()(Rng &&, detail::from_end_<range_difference_t<Rng>>,
                     detail::from_end_<range_difference_t<Rng>>) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
-                        "The object to be sliced must be a model of the InputIterable concept.");
-                    CONCEPT_ASSERT_MSG(SizedIterable<Rng>() || ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
+                        "The object to be sliced must be a model of the InputRange concept.");
+                    CONCEPT_ASSERT_MSG(SizedRange<Rng>() || ForwardRange<Rng>(),
                         "When slicing a range with a start and stop offset measured from the end, "
-                        "the range must either be a model of the SizedIterable concept (its size "
-                        "must be known), or it must be a model of the ForwardIterable concept.");
+                        "the range must either be a model of the SizedRange concept (its size "
+                        "must be known), or it must be a model of the ForwardRange concept.");
                 }
                 // slice(rng, 4, end)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!(InputIterable<Rng>()))>
+                    CONCEPT_REQUIRES_(!(InputRange<Rng>()))>
                 void operator()(Rng &&, range_difference_t<Rng>, end_fn) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
-                        "The object to be sliced must be a model of the InputIterable concept.");
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
+                        "The object to be sliced must be a model of the InputRange concept.");
                 }
                 // slice(rng, end-4, end)
                 template<typename Rng,
-                    CONCEPT_REQUIRES_(!((InputIterable<Rng>() && SizedIterable<Rng>()) ||
-                        ForwardIterable<Rng>()))>
+                    CONCEPT_REQUIRES_(!((InputRange<Rng>() && SizedRange<Rng>()) ||
+                        ForwardRange<Rng>()))>
                 void operator()(Rng &&, detail::from_end_<range_difference_t<Rng>>, end_fn) const
                 {
-                    CONCEPT_ASSERT_MSG(InputIterable<Rng>(),
-                        "The object to be sliced must be a model of the InputIterable concept.");
-                    CONCEPT_ASSERT_MSG(SizedIterable<Rng>() || ForwardIterable<Rng>(),
+                    CONCEPT_ASSERT_MSG(InputRange<Rng>(),
+                        "The object to be sliced must be a model of the InputRange concept.");
+                    CONCEPT_ASSERT_MSG(SizedRange<Rng>() || ForwardRange<Rng>(),
                         "When slicing a range with a start and stop offset measured from the end, "
-                        "the range must either be a model of the SizedIterable concept (its size "
-                        "must be known), or it must be a model of the ForwardIterable concept.");
+                        "the range must either be a model of the SizedRange concept (its size "
+                        "must be known), or it must be a model of the ForwardRange concept.");
                 }
             #endif
             };
